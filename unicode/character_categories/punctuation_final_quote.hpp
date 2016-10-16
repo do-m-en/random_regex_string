@@ -1,0 +1,14 @@
+#ifndef UNICODE_PUNCTUATION_FINAL_QUOTE_HPP_INCLUDED
+#define UNICODE_PUNCTUATION_FINAL_QUOTE_HPP_INCLUDED
+
+namespace unicode {
+
+// Pf
+class punctuation_final_quote
+{
+
+};
+
+}
+
+#endif // UNICODE_PUNCTUATION_FINAL_QUOTE_HPP_INCLUDED

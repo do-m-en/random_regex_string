@@ -1,0 +1,14 @@
+#ifndef UNICODE_PUNCTUATION_CONNECTOR_HPP_INCLUDED
+#define UNICODE_PUNCTUATION_CONNECTOR_HPP_INCLUDED
+
+namespace unicode {
+
+// Pc
+class punctuation_connector
+{
+
+};
+
+}
+
+#endif // UNICODE_PUNCTUATION_CONNECTOR_HPP_INCLUDED

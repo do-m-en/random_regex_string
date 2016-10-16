@@ -1,0 +1,13 @@
+#ifndef UNICODE_MARK_SPACING_COMBINING_HPP_INCLUDED
+#define UNICODE_MARK_SPACING_COMBINING_HPP_INCLUDED
+
+namespace unicode {
+
+// Mc
+class mark_spacing_combining
+{
+};
+
+}
+
+#endif // UNICODE_MARK_SPACING_COMBINING_HPP_INCLUDED

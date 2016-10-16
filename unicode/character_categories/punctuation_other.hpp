@@ -1,0 +1,14 @@
+#ifndef UNICODE_PUNCTUATION_OTHER_HPP_INCLUDED
+#define UNICODE_PUNCTUATION_OTHER_HPP_INCLUDED
+
+namespace unicode {
+
+// Po
+class punctuation_other
+{
+
+};
+
+}
+
+#endif // UNICODE_PUNCTUATION_OTHER_HPP_INCLUDED

@@ -1,0 +1,13 @@
+#ifndef UNICODE_NUMBER_DECIMAL_DIGIT_HPP_INCLUDED
+#define UNICODE_NUMBER_DECIMAL_DIGIT_HPP_INCLUDED
+
+namespace unicode {
+
+// Nd
+class number_decimal_digit
+{
+};
+
+}
+
+#endif // UNICODE_NUMBER_DECIMAL_DIGIT_HPP_INCLUDED

@@ -1,0 +1,17 @@
+#ifndef UNICODE_SEPARATOR_PARAGRAPH_HPP_INCLUDED
+#define UNICODE_SEPARATOR_PARAGRAPH_HPP_INCLUDED
+
+namespace unicode {
+
+// Zp
+class separator_paragraph
+{
+/*
+Character Name
+U+2029    PARAGRAPH SEPARATOR
+*/
+};
+
+}
+
+#endif // UNICODE_SEPARATOR_PARAGRAPH_HPP_INCLUDED

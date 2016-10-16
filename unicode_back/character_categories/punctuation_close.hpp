@@ -1,0 +1,14 @@
+#ifndef UNICODE_PUNCTUATION_CLOSE_HPP_INCLUDED
+#define UNICODE_PUNCTUATION_CLOSE_HPP_INCLUDED
+
+namespace unicode {
+
+// Pe
+class punctuation_close
+{
+
+};
+
+}
+
+#endif // UNICODE_PUNCTUATION_CLOSE_HPP_INCLUDED

@@ -1,0 +1,13 @@
+#ifndef UNICODE_PUNCTUATION_INITIAL_QUOTE_HPP_INCLUDED
+#define UNICODE_PUNCTUATION_INITIAL_QUOTE_HPP_INCLUDED
+
+namespace unicode {
+
+// Pi
+class punctuation_initial_quote
+{
+};
+
+}
+
+#endif // UNICODE_PUNCTUATION_INITIAL_QUOTE_HPP_INCLUDED
