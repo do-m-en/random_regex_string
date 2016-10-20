@@ -95,7 +95,12 @@ public:
       {
         if(regex[consumed] == start_token)
         {
+          ++consumed;
           node = consumer_(regex, consumed);
+
+          if(!node) // FIXME this should never happen
+            --consumed;
+
           break;
         }
       }
@@ -351,18 +356,17 @@ regex_node_* parser_factor(const std::string& regex, std::size_t& consumed)
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
 regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
 {
-  auto form_feed = parser{'f', [](auto& regex, auto& consumed){++consumed; return new literal_regex_node_{'\f'};}};
-  auto new_line = parser{'n', [](auto& regex, auto& consumed){++consumed; return new literal_regex_node_{'\n'};}};
-  auto carriage_return = parser{'r', [](auto& regex, auto& consumed){++consumed; return new literal_regex_node_{'\r'};}};
-  auto horizontal_tab = parser{'t', [](auto& regex, auto& consumed){++consumed; return new literal_regex_node_{'\t'};}};
-  auto vertical_tab = parser{'v', [](auto& regex, auto& consumed){++consumed; return new literal_regex_node_{'\v'};}};
+  auto form_feed = parser{'f', [](auto& regex, auto& consumed){return new literal_regex_node_{'\f'};}};
+  auto new_line = parser{'n', [](auto& regex, auto& consumed){return new literal_regex_node_{'\n'};}};
+  auto carriage_return = parser{'r', [](auto& regex, auto& consumed){return new literal_regex_node_{'\r'};}};
+  auto horizontal_tab = parser{'t', [](auto& regex, auto& consumed){return new literal_regex_node_{'\t'};}};
+  auto vertical_tab = parser{'v', [](auto& regex, auto& consumed){return new literal_regex_node_{'\v'};}};
   auto escaped_literal_char = parser{{'\\', '|', '.', '-', '^', '?', '*', '+', '{', '}', '(', ')', '[', ']'},
-        [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}};
-  auto any_digit = parser{'d', [](auto& regex, auto& consumed){++consumed; return new range_random_regex_node_{'0', '9'};}}; // TODO this should not be in [] section if range is used ([x-y])
-  auto any_whitespace = parser{'s', [](auto& regex, auto& consumed){++consumed; return new whitespace_regex_node_{};}}; // TODO this should not be in [] section if range is used ([x-y])
+        [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed-1]);}};
+  auto any_digit = parser{'d', [](auto& regex, auto& consumed){return new range_random_regex_node_{'0', '9'};}}; // TODO this should not be in [] section if range is used ([x-y])
+  auto any_whitespace = parser{'s', [](auto& regex, auto& consumed){return new whitespace_regex_node_{};}}; // TODO this should not be in [] section if range is used ([x-y])
   auto any_alphanum_or_underscore = parser{'w', [](auto& regex, auto& consumed) // any alphanumeric characters or _  // TODO this should not be in [] section if range is used ([x-y])
         {
-          ++consumed;
           return new or_regex_node_{new range_random_regex_node_('a', 'z'),
                                     new range_random_regex_node_('0', '9'),
                                     new literal_regex_node_('_')};
@@ -386,13 +390,12 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
     };
 
   or_parser escaped_or_literal {
-      {{'\\', [parser_escaped](auto& regex, auto& consumed){++consumed; return parser_escaped(regex, consumed);}}},
+      {{'\\', [parser_escaped](auto& regex, auto& consumed){return parser_escaped(regex, consumed);}}},
       [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}
     };
 
   or_parser range_or_negated_range {
       {{'^', [](auto& regex, auto& consumed){
-          ++consumed;
           std::vector<std::pair<char, char>> ranges;
 
           // TODO have to think this through...
@@ -474,12 +477,11 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
   or_parser parser_base_type{{
         {'(', [](auto& regex, auto& consumed)
           {
-            ++consumed;
             auto node = parser_regex(regex, consumed);
             ++consumed;
             return node;
           }},
-        {'[', [range_or_negated_range](auto& regex, auto& consumed){++consumed; return range_or_negated_range(regex, consumed);}},
+        {'[', [range_or_negated_range](auto& regex, auto& consumed){return range_or_negated_range(regex, consumed);}},
   /*      {'[', [parser_escaped](auto& regex, auto& consumed)
           {
             std::vector<regex_node_*> child_nodes;
@@ -487,7 +489,7 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
             return new range_regex_node_(std::move(child_nodes));
           }
         },*/
-        {'\\', [parser_escaped](auto& regex, auto& consumed){++consumed; return parser_escaped(regex, consumed);}},
+        {'\\', [parser_escaped](auto& regex, auto& consumed){return parser_escaped(regex, consumed);}},
         {'.', [](auto& regex, auto& consumed){++consumed; return new random_regex_node_();}}
       },
       [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}
