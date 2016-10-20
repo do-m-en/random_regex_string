@@ -83,6 +83,8 @@ public:
     //
   }
 
+  // TODO add size checked and unchecked version as other parser types can handle check at the top level for all (or/and parsers)
+  //      for now failing size checks forces or/and parsers to continue untill all parsers are used up
   regex_node_* operator()(const std::string& regex, std::size_t& consumed) const
   {
     regex_node_* node = nullptr;
@@ -110,16 +112,53 @@ private:
 struct and_parser
 {
 public:
-  and_parser() {}
+  and_parser(std::initializer_list<parser> and_parsers, char terminator)
+    : parsers_{and_parsers}, terminator_{terminator} {}
+
+  // TODO this should be optional return value
+  std::vector<regex_node_*> operator()(const std::string& regex, std::size_t& consumed) const
+  {
+    std::vector<regex_node_*> nodes;
+
+    while(regex.size() > consumed)
+    {
+      bool found = false;
+      for(auto& p : parsers_)
+      {
+        //if(auto node = p(regex, consumed); node) - gcc is missing P0305R1 support...
+        auto node = p(regex, consumed);
+        if(node)
+        {
+          nodes.push_back(node);
+          found = true;
+          break;
+        }
+      }
+
+      if(!found)
+      {
+        //throw 1; // TODO throw no match found exception
+        for(auto node : nodes)
+          delete node;
+
+        nodes.clear();
+      }
+    }
+
+    return nodes;
+  }
 
 private:
   std::vector<parser> parsers_;
+  char terminator_;
 };
 
 struct or_parser
 {
 public:
-  or_parser(std::initializer_list<parser> or_parsers) : or_parsers_{or_parsers} {}
+  or_parser(std::initializer_list<parser> or_parsers,
+      std::function<regex_node_* (const std::string& regex, std::size_t& consumed)> else_parser = nullptr
+    ) : or_parsers_{or_parsers}, else_parser_{else_parser} {}
 
   regex_node_* operator()(const std::string& regex, std::size_t& consumed) const
   {
@@ -133,179 +172,20 @@ public:
       }
     }
 
+    if(else_parser_)
+      return else_parser_(regex, consumed);
+
     //throw 1; // TODO throw no match found exception
     return nullptr;
   }
 private:
   std::vector<parser> or_parsers_;
+  std::function<regex_node_* (const std::string& regex, std::size_t& consumed)> else_parser_;
 };
 
 regex_node_* parser_term(const std::string& regex, std::size_t& consumed);
 regex_node_* parser_factor(const std::string& regex, std::size_t& consumed);
 regex_node_* parser_base(const std::string& regex, std::size_t& consumed);
-
-regex_node_* parse_range(const or_parser& parser_escaped, const std::string& regex, std::size_t& consumed)
-{
-  regex_node_* node; // TODO should be a smart pointer
-  ++consumed; // consume [
-
-  if(regex[consumed] == '^')
-  {
-    ++consumed;
-    std::vector<std::pair<char, char>> ranges;
-
-    // TODO have to think this through...
-    // node = new negated_range_regex_node_(std::move(ranges));
-  }
-  else
-  {
-    std::vector<regex_node_*> child_nodes;
-
-    // <range> ::= <char> | <char>-<char> | <char><range> | <char>-<char><range>
-    while(regex.size() > consumed)
-    {
-      if(regex[consumed] == ']')
-      {
-        break;
-      }
-      else
-      {
-        if(regex[consumed] == '\\') /// this section is a copy from below...
-        {
-          ++consumed; // consume \
-
-          // if last character of regex is \ -> error
-          if(regex.size() == consumed)
-          {
-            /// TODO exception handling
-            throw 1;
-          }
-
-          auto tmp = parser_escaped(regex, consumed);
-          if(tmp)
-          {
-            child_nodes.push_back(tmp);
-          }
-          else
-          {
-            /// TODO exception handling
-            throw 1;
-          }
-        }
-        else if((regex[consumed] == '-' && child_nodes.size()) && (consumed+1 < regex.size() && regex[consumed+1] != ']'))
-        {
-          literal_regex_node_* literal_node = dynamic_cast<literal_regex_node_*>(*(child_nodes.end()-1));
-
-          if(literal_node)
-          {
-            ++consumed; // TODO everywhere check that there is still one character left... (in this case if it isn't it's an error)
-            char tmp;
-
-            if(regex[consumed] == '\\')
-            {
-              ++consumed; // consume '\'
-
-              // if last character of regex is \ -> error
-              if(regex.size() == consumed)
-              {
-                /// TODO exception handling
-                throw 1;
-              }
-
-              if(regex[consumed] == 'f') // form feed
-              {
-                *(child_nodes.end()-1) = new range_random_regex_node_(literal_node->getLiteral(), '\f');
-              }
-              else if(regex[consumed] == 'n') // new line
-              {
-                *(child_nodes.end()-1) = new range_random_regex_node_(literal_node->getLiteral(), '\n');
-              }
-              else if(regex[consumed] == 'r') // carriage return
-              {
-                *(child_nodes.end()-1) = new range_random_regex_node_(literal_node->getLiteral(), '\r');
-              }
-              else if(regex[consumed] == 't') // horizontal tab
-              {
-                *(child_nodes.end()-1) = new range_random_regex_node_(literal_node->getLiteral(), '\t');
-              }
-              else if(regex[consumed] == 'v') // vertical tab
-              {
-                *(child_nodes.end()-1) = new range_random_regex_node_(literal_node->getLiteral(), '\v');
-              }
-              else if(regex[consumed] == '\\' || regex[consumed] == '|' || regex[consumed] == '.' || regex[consumed] == '-'
-                  || regex[consumed] == '^' || regex[consumed] == '?' || regex[consumed] == '*' || regex[consumed] == '+'
-                  || regex[consumed] == '{' || regex[consumed] == '}' || regex[consumed] == '(' || regex[consumed] == ')'
-                  || regex[consumed] == '[' || regex[consumed] == ']')
-              {
-                *(child_nodes.end()-1) = new range_random_regex_node_(literal_node->getLiteral(), regex[consumed]);
-              }
-/*these all fall into else...
-              else if(regex[consumed] == 'd') // any digit
-              {
-                /// TODO exception handling - this is not a single character so it cant be part of a range
-                throw 1;
-              }
-              else if(regex[consumed] == 'D') // any non-digit
-              {
-                /// TODO exception handling - this is not a single character so it cant be part of a range
-                throw 1;
-              }
-              else if(regex[consumed] == 's') // any whitespace
-              {
-                /// TODO exception handling - this is not a single character so it cant be part of a range
-                throw 1;
-              }
-              else if(regex[consumed] == 'S') // any non-whitespace
-              {
-                /// TODO exception handling - this is not a single character so it cant be part of a range
-                throw 1;
-              }
-              else if(regex[consumed] == 'w') // any alphanumeric characters or _
-              {
-                /// TODO exception handling - this is not a single character so it cant be part of a range
-                throw 1;
-              }
-              else if(regex[consumed] == 'W') // characters other than alphanumeric characters or _
-              {
-                /// TODO exception handling - this is not a single character so it cant be part of a range
-                throw 1;
-              }*/
-              else
-              {
-                /// TODO exception handling
-                throw 1;
-              }
-            }/// TODO FIXME we still have to check which of the escaped characters it is and append that one...
-            else
-            {
-              *(child_nodes.end()-1) = new range_random_regex_node_(literal_node->getLiteral(), regex[consumed]); // TODO if first > secont then error (a-z is OK z-a is an error)
-            }
-
-            delete literal_node;
-          }
-          else
-          {
-            // TODO this branch should also handle escaped chars...
-            child_nodes.push_back(new literal_regex_node_(regex[consumed]));
-          }
-          
-          ++consumed;
-        }
-        else
-        {
-          child_nodes.push_back(new literal_regex_node_(regex[consumed]));
-          ++consumed;
-        }
-      }
-    }
-
-    node = new range_regex_node_(std::move(child_nodes));
-  }
-
-  ++consumed; // consume ]
-
-  return node;
-}
 
 // <regex> ::= <term> '|' <regex> | <term>
 regex_node_* parser_regex(const std::string& regex, std::size_t& consumed)
@@ -478,9 +358,9 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
   auto vertical_tab = parser{'v', [](auto& regex, auto& consumed){++consumed; return new literal_regex_node_{'\v'};}};
   auto escaped_literal_char = parser{{'\\', '|', '.', '-', '^', '?', '*', '+', '{', '}', '(', ')', '[', ']'},
         [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}};
-  auto any_digit = parser{'d', [](auto& regex, auto& consumed){++consumed; return new range_random_regex_node_{'0', '9'};}};
-  auto any_whitespace = parser{'s', [](auto& regex, auto& consumed){++consumed; return new whitespace_regex_node_{};}};
-  auto any_alphanum_or_underscore = parser{'w', [](auto& regex, auto& consumed) // any alphanumeric characters or _
+  auto any_digit = parser{'d', [](auto& regex, auto& consumed){++consumed; return new range_random_regex_node_{'0', '9'};}}; // TODO this should not be in [] section if range is used ([x-y])
+  auto any_whitespace = parser{'s', [](auto& regex, auto& consumed){++consumed; return new whitespace_regex_node_{};}}; // TODO this should not be in [] section if range is used ([x-y])
+  auto any_alphanum_or_underscore = parser{'w', [](auto& regex, auto& consumed) // any alphanumeric characters or _  // TODO this should not be in [] section if range is used ([x-y])
         {
           ++consumed;
           return new or_regex_node_{new range_random_regex_node_('a', 'z'),
@@ -505,27 +385,115 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
       {'W', [](auto& regex, auto& consumed){throw 1;}} // characters other than alphanumeric characters or _ // TODO implement*/
     };
 
-  or_parser parser_base_type{
-      {'(', [](auto& regex, auto& consumed)
-        {
-          ++consumed;
-          auto node = parser_regex(regex, consumed);
-          ++consumed;
-          return node;
-        }},
-      {'[', [parser_escaped](auto& regex, auto& consumed){return parse_range(parser_escaped, regex, consumed);}},
-      {'\\', [parser_escaped](auto& regex, auto& consumed){++consumed; return parser_escaped(regex, consumed);}},
-      {'.', [](auto& regex, auto& consumed){++consumed; return new random_regex_node_();}}/*,
-      {'', [](auto& regex, auto& consumed){return parse_literal(regex, consumed);}} TODO we need support for else...*/
+  or_parser escaped_or_literal {
+      {{'\\', [parser_escaped](auto& regex, auto& consumed){++consumed; return parser_escaped(regex, consumed);}}},
+      [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}
     };
 
-  auto node = parser_base_type(regex, consumed);
-  if(!node) // else
-  {
-    node = new literal_regex_node_(regex[consumed++]);;
-  }
+  or_parser range_or_negated_range {
+      {{'^', [](auto& regex, auto& consumed){
+          ++consumed;
+          std::vector<std::pair<char, char>> ranges;
 
-  return node;
+          // TODO have to think this through...
+          // node = new negated_range_regex_node_(std::move(ranges));
+          return nullptr;
+        }}},
+      [escaped_or_literal](auto& regex, auto& consumed){
+          //return escaped_or_literal(regex, consumed);
+
+          std::vector<regex_node_*> child_nodes;
+
+          regex_node_* tmp_node = nullptr; // TODO should be a smart ptr...
+
+          // <range> ::= <char> | <char>-<char> | <char><range> | <char>-<char><range>
+          while(regex.size() > consumed)
+          {
+            if(regex[consumed] == ']')
+            {
+              break;
+            }
+            else
+            {
+              if((regex[consumed] == '-' && tmp_node) && (consumed+1 < regex.size() && regex[consumed+1] != ']')) // TODO if this second part happens an exception is probably in order
+              {
+                literal_regex_node_* literal_node = dynamic_cast<literal_regex_node_*>(tmp_node);
+
+                ++consumed; // TODO everywhere check that there is still one character left... (in this case if it isn't it's an error)
+
+                auto tmp = escaped_or_literal(regex, consumed);
+                if(!tmp)
+                {
+                  /// TODO exception handling
+                  throw 1;
+                }
+
+                child_nodes.push_back(new range_random_regex_node_(literal_node->getLiteral(), dynamic_cast<literal_regex_node_*>(tmp)->getLiteral())); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
+                delete tmp;
+
+                delete literal_node;
+                tmp_node = nullptr;
+              }
+              else
+              {
+                auto tmp = escaped_or_literal(regex, consumed);
+                if(tmp)
+                {
+                  if(tmp_node)
+                    child_nodes.push_back(tmp_node);
+
+                  tmp_node = tmp;
+                  //child_nodes.push_back(tmp);
+                }
+                else
+                {
+                  /// TODO exception handling
+                  throw 1;
+                }
+              }
+            }
+          }
+
+          if(tmp_node)
+            child_nodes.push_back(tmp_node);
+
+          ++consumed; // consume ]
+
+          return new range_regex_node_(std::move(child_nodes));
+        }
+    };
+
+/*  and_parser parse_range_p {
+      {{[](auto& regex, auto& consumed){
+          return nullptr; // TODO
+        }}
+      },
+      ']'
+    };*/
+
+  or_parser parser_base_type{{
+        {'(', [](auto& regex, auto& consumed)
+          {
+            ++consumed;
+            auto node = parser_regex(regex, consumed);
+            ++consumed;
+            return node;
+          }},
+        {'[', [range_or_negated_range](auto& regex, auto& consumed){++consumed; return range_or_negated_range(regex, consumed);}},
+  /*      {'[', [parser_escaped](auto& regex, auto& consumed)
+          {
+            std::vector<regex_node_*> child_nodes;
+
+            return new range_regex_node_(std::move(child_nodes));
+          }
+        },*/
+        {'\\', [parser_escaped](auto& regex, auto& consumed){++consumed; return parser_escaped(regex, consumed);}},
+        {'.', [](auto& regex, auto& consumed){++consumed; return new random_regex_node_();}}
+      },
+      [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}
+    };
+
+  return parser_base_type(regex, consumed);
 }
 
 regex_template::regex_template(const std::string& regex)
