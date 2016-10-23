@@ -99,8 +99,10 @@ public:
           ++consumed;
           node = consumer_(regex, consumed);
 
-          if(!node) // FIXME this should never happen
+          if(!node) {
             --consumed;
+            throw 1; // TODO throw if start token was found but consumption did not take place
+          }
 
           break;
         }
@@ -383,7 +385,7 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
         }
       };
 
-  or_parser parser_escaped{
+  or_parser parser_escaped {
       form_feed,
       new_line,
       carriage_return,
@@ -404,10 +406,25 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
       [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}
     };
 
+  or_parser parse_end_range_escaped {
+      form_feed,
+      new_line,
+      carriage_return,
+      horizontal_tab,
+      vertical_tab,
+      escaped_literal_char
+//      {'f', [](const std::string& regex, std::size_t& consumed){++consumed; return new literal_regex_node_('\f');}},
+    };
+
+  or_parser end_range_escaped_or_literal {
+      {{'\\', [parse_end_range_escaped](auto& regex, auto& consumed){return parse_end_range_escaped(regex, consumed);}}},
+      [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}
+    };
+
   and_parser range_parser {
       {},
       ']',
-      [escaped_or_literal](auto& regex, auto& consumed)
+      [escaped_or_literal, end_range_escaped_or_literal](auto& regex, auto& consumed)
       {
         auto tmp_node = escaped_or_literal(regex, consumed);
         if(!tmp_node)
@@ -429,9 +446,7 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
             throw 1;
           }
 
-          // TODO is this legal?: [x-]]
-
-          auto tmp = escaped_or_literal(regex, consumed);
+          auto tmp = end_range_escaped_or_literal(regex, consumed);
           if(!tmp)
           {
             /// TODO exception handling

@@ -48,7 +48,9 @@ int main()
   test_regex_ECMAScript("[\\^]*");
   test_regex_ECMAScript("[\\n-\\^]*");
   test_regex_ECMAScript("\\f\\{");
+  test_regex_ECMAScript("[a-]]");
 //  test_regex_ECMAScript("[^a-c]*");
+//  test_regex_ECMAScript("[^a-z0-9x]*");
   // TODO add negative cases... TODO also check if they realy are invalid
   // []
   // [z-a]
