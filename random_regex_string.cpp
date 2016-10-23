@@ -85,6 +85,7 @@ public:
 
   // TODO add size checked and unchecked version as other parser types can handle check at the top level for all (or/and parsers)
   //      for now failing size checks forces or/and parsers to continue untill all parsers are used up
+//  template<bool truncate=true>
   regex_node_* operator()(const std::string& regex, std::size_t& consumed) const
   {
     regex_node_* node = nullptr;
@@ -117,15 +118,16 @@ private:
 struct and_parser
 {
 public:
-  and_parser(std::initializer_list<parser> and_parsers, char terminator)
-    : parsers_{and_parsers}, terminator_{terminator} {}
+  and_parser(std::initializer_list<parser> and_parsers, char terminator,
+        std::function<regex_node_* (const std::string& regex, std::size_t& consumed)> else_parser = nullptr)
+    : parsers_{and_parsers}, terminator_{terminator}, else_parser_{else_parser} {}
 
   // TODO this should be optional return value
   std::vector<regex_node_*> operator()(const std::string& regex, std::size_t& consumed) const
   {
     std::vector<regex_node_*> nodes;
 
-    while(regex.size() > consumed)
+    while(regex.size() > consumed && regex[consumed] != terminator_)
     {
       bool found = false;
       for(auto& p : parsers_)
@@ -142,11 +144,18 @@ public:
 
       if(!found)
       {
-        //throw 1; // TODO throw no match found exception
-        for(auto node : nodes)
-          delete node;
+        if(else_parser_)
+          nodes.push_back(else_parser_(regex, consumed)); // TODO check if null is returned...
+        else
+        {
+          //throw 1; // TODO throw no match found exception
+          for(auto node : nodes)
+            delete node;
 
-        nodes.clear();
+          nodes.clear();
+
+          throw 1;
+        }
       }
     }
 
@@ -155,6 +164,7 @@ public:
 
 private:
   std::vector<parser> parsers_;
+  std::function<regex_node_* (const std::string& regex, std::size_t& consumed)> else_parser_;
   char terminator_;
 };
 
@@ -394,85 +404,69 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
       [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed++]);}
     };
 
+  and_parser range_parser {
+      {},
+      ']',
+      [escaped_or_literal](auto& regex, auto& consumed)
+      {
+        auto tmp_node = escaped_or_literal(regex, consumed);
+        if(!tmp_node)
+        {
+          /// TODO exception handling
+          throw 1;
+        }
+
+        if(consumed+2 < regex.size() && regex[consumed] == '-' && regex[consumed+1] != ']')
+        {
+          literal_regex_node_* literal_node = dynamic_cast<literal_regex_node_*>(tmp_node);
+
+          ++consumed;
+
+          if(consumed+1 >= regex.size())
+          {
+            /// TODO exception handling
+            delete tmp_node; // TODO RAII
+            throw 1;
+          }
+
+          // TODO is this legal?: [x-]]
+
+          auto tmp = escaped_or_literal(regex, consumed);
+          if(!tmp)
+          {
+            /// TODO exception handling
+            delete tmp_node; // TODO RAII
+            throw 1;
+          }
+
+          tmp_node = new range_random_regex_node_(literal_node->getLiteral(), dynamic_cast<literal_regex_node_*>(tmp)->getLiteral()); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
+          delete tmp;
+          delete literal_node;
+        }
+
+        return tmp_node;
+      }
+    };
+
   or_parser range_or_negated_range {
-      {{'^', [](auto& regex, auto& consumed){
-          std::vector<std::pair<char, char>> ranges;
+      {{'^', [range_parser](auto& regex, auto& consumed){
+          auto tmp =range_parser(regex, consumed);
+          // TODO check if range parser returns an empty vector
+
+          auto invert = tmp; // TODO consume the rest and then convert it to inverted type...
 
           // TODO have to think this through...
           // node = new negated_range_regex_node_(std::move(ranges));
-          return nullptr;
-        }}},
-      [escaped_or_literal](auto& regex, auto& consumed){
-          //return escaped_or_literal(regex, consumed);
-
-          std::vector<regex_node_*> child_nodes;
-
-          regex_node_* tmp_node = nullptr; // TODO should be a smart ptr...
-
-          // <range> ::= <char> | <char>-<char> | <char><range> | <char>-<char><range>
-          while(regex.size() > consumed)
-          {
-            if(regex[consumed] == ']')
-            {
-              break;
-            }
-            else
-            {
-              if((regex[consumed] == '-' && tmp_node) && (consumed+1 < regex.size() && regex[consumed+1] != ']')) // TODO if this second part happens an exception is probably in order
-              {
-                literal_regex_node_* literal_node = dynamic_cast<literal_regex_node_*>(tmp_node);
-
-                ++consumed; // TODO everywhere check that there is still one character left... (in this case if it isn't it's an error)
-
-                auto tmp = escaped_or_literal(regex, consumed);
-                if(!tmp)
-                {
-                  /// TODO exception handling
-                  throw 1;
-                }
-
-                child_nodes.push_back(new range_random_regex_node_(literal_node->getLiteral(), dynamic_cast<literal_regex_node_*>(tmp)->getLiteral())); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
-                delete tmp;
-
-                delete literal_node;
-                tmp_node = nullptr;
-              }
-              else
-              {
-                auto tmp = escaped_or_literal(regex, consumed);
-                if(tmp)
-                {
-                  if(tmp_node)
-                    child_nodes.push_back(tmp_node);
-
-                  tmp_node = tmp;
-                  //child_nodes.push_back(tmp);
-                }
-                else
-                {
-                  /// TODO exception handling
-                  throw 1;
-                }
-              }
-            }
-          }
-
-          if(tmp_node)
-            child_nodes.push_back(tmp_node);
 
           ++consumed; // consume ]
-
-          return new range_regex_node_(std::move(child_nodes));
+          return new range_regex_node_(std::move(invert));
+        }}},
+      [range_parser](auto& regex, auto& consumed){
+          auto tmp = new range_regex_node_(range_parser(regex, consumed)); // TODO check if range parser returns an empty vector
+          ++consumed; // consume ]
+          return tmp;
         }
     };
-
-/*  and_parser parse_range_p {
-      {{[](auto& regex, auto& consumed){
-          return nullptr; // TODO
-        }}
-      },
-      ']'
-    };*/
 
   or_parser parser_base_type{{
         {'(', [](auto& regex, auto& consumed)
@@ -480,15 +474,8 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
             auto node = parser_regex(regex, consumed);
             ++consumed;
             return node;
-          }},
+          }}, // TODO, ')'},
         {'[', [range_or_negated_range](auto& regex, auto& consumed){return range_or_negated_range(regex, consumed);}},
-  /*      {'[', [parser_escaped](auto& regex, auto& consumed)
-          {
-            std::vector<regex_node_*> child_nodes;
-
-            return new range_regex_node_(std::move(child_nodes));
-          }
-        },*/
         {'\\', [parser_escaped](auto& regex, auto& consumed){return parser_escaped(regex, consumed);}},
         {'.', [](auto& regex, auto& consumed){++consumed; return new random_regex_node_();}}
       },
