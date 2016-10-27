@@ -10,14 +10,9 @@
 #include "group_regex_node.hpp"
 #include "or_regex_node.hpp"
 #include "range_random_regex_node.hpp"
-#include "range_regex_node.hpp"
-#include "negated_range_regex_node.hpp"
 #include "random_regex_node.hpp"
-#include "repeat_zero_regex_node.hpp"
 #include "optional_regex_node.hpp"
-#include "repeat_one_regex_node.hpp"
 #include "repeat_regex_node.hpp"
-#include "repeat_min_regex_node.hpp"
 #include "repeat_range_regex_node.hpp"
 #include "whitespace_regex_node.hpp"
 #include "literal_regex_node.hpp"
@@ -26,14 +21,9 @@ using rand_regex::regex_node_;
 using rand_regex::group_regex_node_;
 using rand_regex::or_regex_node_;
 using rand_regex::range_random_regex_node_;
-using rand_regex::range_regex_node_;
-using rand_regex::negated_range_regex_node_;
 using rand_regex::random_regex_node_;
-using rand_regex::repeat_zero_regex_node_;
 using rand_regex::optional_regex_node_;
-using rand_regex::repeat_one_regex_node_;
 using rand_regex::repeat_regex_node_;
-using rand_regex::repeat_min_regex_node_;
 using rand_regex::repeat_range_regex_node_;
 using rand_regex::whitespace_regex_node_;
 using rand_regex::literal_regex_node_;
@@ -241,7 +231,7 @@ regex_node_* parser_factor(const std::string& regex, std::size_t& consumed)
 
   if(consumed < regex.size() && regex[consumed] == '*')
   {
-    node = new repeat_zero_regex_node_(node);
+    node = new repeat_range_regex_node_(node, 0);
 
     do
     {
@@ -252,7 +242,7 @@ regex_node_* parser_factor(const std::string& regex, std::size_t& consumed)
 
   if(consumed < regex.size() && regex[consumed] == '+')
   {
-    node = new repeat_one_regex_node_(node);
+    node = new repeat_range_regex_node_(node, 1);
 
     // ++ is posessive but for the sake of generation it doesn't make any
     // difference as it may always match one or more times...
@@ -332,7 +322,7 @@ regex_node_* parser_factor(const std::string& regex, std::size_t& consumed)
         }
         else
         {
-          node = new repeat_min_regex_node_(node, min);
+          node = new repeat_range_regex_node_(node, min);
         }
       }
       else
@@ -365,6 +355,7 @@ regex_node_* parser_factor(const std::string& regex, std::size_t& consumed)
   return node;
 }
 
+#include <limits> // TODO move to the top
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
 regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
 {
@@ -375,15 +366,36 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
   auto vertical_tab = parser{'v', [](auto& regex, auto& consumed){return new literal_regex_node_{'\v'};}};
   auto escaped_literal_char = parser{{'\\', '|', '.', '-', '^', '?', '*', '+', '{', '}', '(', ')', '[', ']'},
         [](auto& regex, auto& consumed){return new literal_regex_node_(regex[consumed-1]);}};
-  auto any_digit = parser{'d', [](auto& regex, auto& consumed){return new range_random_regex_node_{'0', '9'};}}; // TODO this should not be in [] section if range is used ([x-y])
-  auto any_whitespace = parser{'s', [](auto& regex, auto& consumed){return new whitespace_regex_node_{};}}; // TODO this should not be in [] section if range is used ([x-y])
-  auto any_alphanum_or_underscore = parser{'w', [](auto& regex, auto& consumed) // any alphanumeric characters or _  // TODO this should not be in [] section if range is used ([x-y])
+  auto any_digit = parser{'d', [](auto& regex, auto& consumed){return new range_random_regex_node_{'0', '9'};}};
+  auto any_non_digit = parser{'D', [](auto& regex, auto& consumed){
+          return new or_regex_node_{new range_random_regex_node_{std::numeric_limits<char>::min(), '0' - 1},
+                                    new range_random_regex_node_{'9' + 1, std::numeric_limits<char>::max()}};
+        }};
+  auto any_whitespace = parser{'s', [](auto& regex, auto& consumed){return new whitespace_regex_node_{};}};
+  auto any_non_whitespace = parser{'S', [](auto& regex, auto& consumed){
+       /* '\t' // tab: 9
+          '\n' // newline: 10
+          '\v' // vertical tab: 11
+          '\f' // formfeed: 12
+          '\r' // carriage return: 13
+          ' ' // space: 32 */
+          return new or_regex_node_{new range_random_regex_node_{std::numeric_limits<char>::min(), '\t' - 1},
+                                    new range_random_regex_node_{'\r' + 1, ' ' - 1},
+                                    new range_random_regex_node_{' ' + 1, std::numeric_limits<char>::max()}};
+        }};
+  auto any_alphanum_or_underscore = parser{'w', [](auto& regex, auto& consumed) // any alphanumeric characters or _
         {
-          return new or_regex_node_{new range_random_regex_node_('a', 'z'),
-                                    new range_random_regex_node_('0', '9'),
-                                    new literal_regex_node_('_')};
-        }
-      };
+          return new or_regex_node_{new range_random_regex_node_{'a', 'z'},
+                                    new range_random_regex_node_{'0', '9'},
+                                    new literal_regex_node_{'_'}};
+        }};
+  auto any_not_alphanum_or_underscore = parser{'W', [](auto& regex, auto& consumed){
+          return new or_regex_node_{new range_random_regex_node_{std::numeric_limits<char>::min(), '0' - 1},
+                                    new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                    new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                    new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                    new range_random_regex_node_{'z' + 1, std::numeric_limits<char>::max()}};
+        }};
 
   or_parser parser_escaped {
       form_feed,
@@ -392,13 +404,12 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
       horizontal_tab,
       vertical_tab,
       escaped_literal_char,
-//      {'f', [](const std::string& regex, std::size_t& consumed){++consumed; return new literal_regex_node_('\f');}},
       any_digit,
-//      {'D', [](auto& regex, auto& consumed){throw 1;}}, // any non-digit // TODO implement
+      any_non_digit,
       any_whitespace,
-//      {'S', [](auto& regex, auto& consumed){throw 1;}}, // any non-whitespace // TODO implement
-      any_alphanum_or_underscore/*,
-      {'W', [](auto& regex, auto& consumed){throw 1;}} // characters other than alphanumeric characters or _ // TODO implement*/
+      any_non_whitespace,
+      any_alphanum_or_underscore,
+      any_not_alphanum_or_underscore
     };
 
   or_parser escaped_or_literal {
@@ -413,7 +424,6 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
       horizontal_tab,
       vertical_tab,
       escaped_literal_char
-//      {'f', [](const std::string& regex, std::size_t& consumed){++consumed; return new literal_regex_node_('\f');}},
     };
 
   or_parser end_range_escaped_or_literal {
@@ -435,7 +445,7 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
 
         if(consumed+2 < regex.size() && regex[consumed] == '-' && regex[consumed+1] != ']')
         {
-          literal_regex_node_* literal_node = dynamic_cast<literal_regex_node_*>(tmp_node);
+          literal_regex_node_* literal_node = static_cast<literal_regex_node_*>(tmp_node);
 
           ++consumed;
 
@@ -454,7 +464,7 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
             throw 1;
           }
 
-          tmp_node = new range_random_regex_node_(literal_node->getLiteral(), dynamic_cast<literal_regex_node_*>(tmp)->getLiteral()); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
+          tmp_node = new range_random_regex_node_(literal_node->getLiteral(), static_cast<literal_regex_node_*>(tmp)->getLiteral()); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
           delete tmp;
           delete literal_node;
         }
@@ -465,19 +475,144 @@ regex_node_* parser_base(const std::string& regex, std::size_t& consumed)
 
   or_parser range_or_negated_range {
       {{'^', [range_parser](auto& regex, auto& consumed){
-          auto tmp =range_parser(regex, consumed);
+          auto tmp = range_parser(regex, consumed);
           // TODO check if range parser returns an empty vector
 
-          auto invert = tmp; // TODO consume the rest and then convert it to inverted type...
+          std::vector<regex_node_*> invert;
+          std::vector<std::pair<char, char>> ranges;
 
-          // TODO have to think this through...
-          // node = new negated_range_regex_node_(std::move(ranges));
+          // convert
+          for(auto element : tmp)
+          {
+            if(auto lit = dynamic_cast<literal_regex_node_*>(element))
+            {
+              ranges.emplace_back(lit->getLiteral(), lit->getLiteral());
+            }
+            else if(auto range = dynamic_cast<range_random_regex_node_*>(element))
+            {
+              ranges.emplace_back(range->get_from(), range->get_to());
+            }
+
+            delete element;
+          }
+
+          // handle single range case
+          if(tmp.size() == 1)
+          {
+            // TODO merge
+            if(ranges[0].first != std::numeric_limits<char>::min() && ranges[0].second != std::numeric_limits<char>::max())
+            {
+              invert.push_back(new range_random_regex_node_(std::numeric_limits<char>::min(), ranges[0].first - 1));
+              invert.push_back(new range_random_regex_node_(ranges[0].second + 1, std::numeric_limits<char>::max()));
+            }
+            else if(ranges[0].first == std::numeric_limits<char>::min() && ranges[0].second == std::numeric_limits<char>::max())
+            {
+              // in rare case where no characters are allowed throw an exception as regex is faulty...
+              throw 1; // TODO exception
+            }
+            else if(ranges[0].first == std::numeric_limits<char>::min())
+            {
+              invert.push_back(new range_random_regex_node_(ranges[0].second + 1, std::numeric_limits<char>::max()));
+            }
+            else
+            {
+              invert.push_back(new range_random_regex_node_(std::numeric_limits<char>::min(), ranges[0].first - 1));
+            }
+          }
+          else
+          {
+            std::sort(ranges.begin(), ranges.end(), [](auto& i, auto& j){return (i.first<j.first);});
+
+            // merge and invert ranges
+            auto min = std::numeric_limits<char>::min();
+            auto cur_it = ranges.begin();
+            for(auto it = ranges.begin() + 1; it != ranges.end(); ++it)
+            {
+              auto& cur = *cur_it;
+              auto& next = *it;
+
+              if(cur.second >= next.second) // because of the sort we know that first is either same or smaller so a sub range
+              {
+                if(it+1 == ranges.end()) // TODO merge with lower
+                {
+                  if(cur.first != std::numeric_limits<char>::min() && cur.second != std::numeric_limits<char>::max())
+                  {
+                    invert.push_back(new range_random_regex_node_(min, cur.first - 1));
+                    invert.push_back(new range_random_regex_node_(cur.second + 1, std::numeric_limits<char>::max()));
+                  }
+                  else if(cur.first == std::numeric_limits<char>::min() && cur.second == std::numeric_limits<char>::max())
+                  {
+                    // in rare case where no characters are allowed throw an exception as regex is faulty...
+                    throw 1; // TODO exception
+                  }
+                  else if(cur.first == std::numeric_limits<char>::min())
+                  {
+                    invert.push_back(new range_random_regex_node_(cur.second + 1, std::numeric_limits<char>::max()));
+                  }
+                  else
+                  {
+                    invert.push_back(new range_random_regex_node_(min, cur.first - 1));
+                  }
+
+                  break;
+                }
+
+                continue;
+              }
+              else if(cur.second+1 >= next.first) // adjacent or overlapping ranges
+              {
+                if(it+1 == ranges.end()) // TODO merge with upper
+                {
+                  if(cur.first != std::numeric_limits<char>::min() && next.second != std::numeric_limits<char>::max())
+                  {
+                    invert.push_back(new range_random_regex_node_(min, cur.first - 1));
+                    invert.push_back(new range_random_regex_node_(next.second + 1, std::numeric_limits<char>::max()));
+                  }
+                  else if(cur.first == std::numeric_limits<char>::min() && next.second == std::numeric_limits<char>::max())
+                  {
+                    // in rare case where no characters are allowed throw an exception as regex is faulty...
+                    throw 1; // TODO exception
+                  }
+                  else if(cur.first == std::numeric_limits<char>::min())
+                  {
+                    invert.push_back(new range_random_regex_node_(next.second + 1, std::numeric_limits<char>::max()));
+                  }
+                  else
+                  {
+                    invert.push_back(new range_random_regex_node_(min, cur.first - 1));
+                  }
+
+                  break;
+                }
+
+                cur.second = next.second;
+              }
+              else // ranges aren't connected
+              {
+                if(cur.first != std::numeric_limits<char>::min() && cur.second != std::numeric_limits<char>::max())
+                {
+                  invert.push_back(new range_random_regex_node_(min, static_cast<char>(cur.first - 1)));
+                  invert.push_back(new range_random_regex_node_(static_cast<char>(cur.second + 1), static_cast<char>(next.first - 1)));
+                }
+                else if(cur.first == std::numeric_limits<char>::min() && cur.second == std::numeric_limits<char>::max())
+                {
+                  // in rare case where no characters are allowed throw an exception as regex is faulty...
+                  throw 1; // TODO exception
+                }
+                // else skip the element as not allowed numbers are from beginning to end of this range
+                // TODO !min but ==max with merge, merge, merge...???
+
+                min = cur.second + 1;
+                cur_it = it;
+              }
+            }
+          }
 
           ++consumed; // consume ]
-          return new range_regex_node_(std::move(invert));
+          return new or_regex_node_(std::move(invert));
         }}},
       [range_parser](auto& regex, auto& consumed){
-          auto tmp = new range_regex_node_(range_parser(regex, consumed)); // TODO check if range parser returns an empty vector
+          auto tmp = new or_regex_node_(range_parser(regex, consumed)); // TODO check if range parser returns an empty vector
           ++consumed; // consume ]
           return tmp;
         }

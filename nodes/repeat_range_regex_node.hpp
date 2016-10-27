@@ -9,7 +9,7 @@ namespace rand_regex {
 class repeat_range_regex_node_ : public regex_node_ // {x,y}
 {
 public:
-  repeat_range_regex_node_(regex_node_* node, std::size_t min, std::size_t max);
+  repeat_range_regex_node_(regex_node_* node, std::size_t min, std::size_t max = 10); // TODO 10 should be a parameter
   void generate(std::ostream& os) const override;
 
 private:

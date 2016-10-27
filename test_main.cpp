@@ -48,12 +48,19 @@ int main()
   test_regex_ECMAScript("[\\^]*");
   test_regex_ECMAScript("[\\n-\\^]*");
   test_regex_ECMAScript("\\f\\{");
+  test_regex_ECMAScript("\\d+_\\D+");
+  test_regex_ECMAScript("\\s+_\\S+");
+  test_regex_ECMAScript("\\w+_\\W+");
   test_regex_ECMAScript("[a-]]");
-//  test_regex_ECMAScript("[^a-c]*");
-//  test_regex_ECMAScript("[^a-z0-9x]*");
+  test_regex_ECMAScript("[^a]*");
+  test_regex_ECMAScript("[^a-c]*");
+  test_regex_ECMAScript("[^a-z0-9x]*");
+  test_regex_ECMAScript("[^b-cd-eg-mh-ij-ls-vr-t]*");
   // TODO add negative cases... TODO also check if they realy are invalid
   // []
   // [z-a]
 
 //  test_regex_ECMAScript("upper\\p{Lu}case");
+
+  // TODO http://stackoverflow.com/questions/2637675/how-to-negate-the-whole-regex
 }

@@ -2,6 +2,13 @@
 
 using rand_regex::or_regex_node_;
 
+or_regex_node_::or_regex_node_(std::vector<regex_node_*>&& nodes)
+  : or_nodes_(std::move(nodes))
+{
+  //
+}
+
+// TODO add bool squash or nodes template flag or helper function that does that in advance (maybe better)...
 or_regex_node_::or_regex_node_(std::initializer_list<regex_node_*> list)
 {
   // unwrap or nodes
