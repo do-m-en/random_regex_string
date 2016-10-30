@@ -43,7 +43,7 @@ void or_regex_node_::append(regex_node_* item)
   }
 }
 
-void or_regex_node_::generate(std::ostream& os) const
+void or_regex_node_::generate(std::ostream& os, random_generator_base& random_gen) const
 {
   std::size_t index;
 
@@ -53,9 +53,8 @@ void or_regex_node_::generate(std::ostream& os) const
   }
   else
   {
-    srand(time(NULL)); // TODO add option to provide random seed
-    index = rand()%or_nodes_.size();
+    index = random_gen.get_random(0, or_nodes_.size() - 1);
   }
 
-  or_nodes_[index]->generate(os);
+  or_nodes_[index]->generate(os, random_gen);
 }

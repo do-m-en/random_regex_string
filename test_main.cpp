@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <regex>
+#include <set>
 #include "unicode/blocks.hpp" // TODO this should probbably be moved to random_regex_string as base? or not as ascii could also be supported...
 #include "random_regex_string.hpp"
 
@@ -9,12 +10,15 @@ namespace {
   {
     using rand_regex::regex_template;
 
-    std::cout << "regex='" << regex << "'\n";
+    std::cout << "regex='" << regex << "'";
 
     regex_template generator(regex);
     std::regex rx(regex);
 
-    for(int i=0; i<1000; ++i)
+    int max = 1000;
+    std::set<std::string> distinct;
+
+    for(int i=0; i<max; ++i)
     {
       std::stringstream ss;
       generator.generate(ss);
@@ -23,10 +27,14 @@ namespace {
 
       if(!std::regex_match(result, rx))
       {
-        std::cerr << "ERROR! result='" << result << "'\n";
+        std::cout << "    ERROR! result='" << result << "'\n";
         throw std::runtime_error("regex test failed!");
       }
+
+      distinct.insert(result);
     }
+
+    std::cout << "    distinct: " << distinct.size() << '/' << max << '\n';
   }
 }
 
@@ -51,6 +59,7 @@ int main()
     test_regex_ECMAScript("ab\\?c\\\\\\?");
     test_regex_ECMAScript("(ab){2}(cd){3,5}");
     test_regex_ECMAScript("(ab){2}(cd){3,5}e{2,}");
+    test_regex_ECMAScript("[0-9A-Z]{5}");
     test_regex_ECMAScript("[abd-x---0-9--]*");
     test_regex_ECMAScript("[a-c][abd][a-bcd-e0-8][---][--][-a-]");
     test_regex_ECMAScript("[0-9]{3}-\\s[0-9]{2}-[0-9]{4}");

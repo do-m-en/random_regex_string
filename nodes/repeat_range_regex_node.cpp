@@ -12,14 +12,10 @@ repeat_range_regex_node_::repeat_range_regex_node_(regex_node_* node, std::size_
   //
 }
 
-void repeat_range_regex_node_::generate(std::ostream& os) const
+void repeat_range_regex_node_::generate(std::ostream& os, random_generator_base& random_gen) const
 {
-  std::random_device rd;
-  std::default_random_engine generator(rd());
-  std::uniform_int_distribution<int> distribution(min_, max_);
-
-  for(int i = distribution(generator); i > 0; --i)
+  for(int i = random_gen.get_random(min_, max_); i > 0; --i)
   {
-    node_->generate(os);
+    node_->generate(os, random_gen);
   }
 }

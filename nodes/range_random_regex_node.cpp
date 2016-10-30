@@ -11,11 +11,7 @@ range_random_regex_node_::range_random_regex_node_(char from, char to)
   //
 }
 
-void range_random_regex_node_::generate(std::ostream& os) const
+void range_random_regex_node_::generate(std::ostream& os, random_generator_base& random_gen) const
 {
-  std::random_device rd;
-  std::default_random_engine generator(rd());
-  std::uniform_int_distribution<char> distribution(from_, to_);
-
-  os << distribution(generator);
+  os << (char)random_gen.get_random((int)from_, (int)to_); // TODO clean up the casts...
 }

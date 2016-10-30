@@ -10,7 +10,7 @@ class range_random_regex_node_ : public regex_node_ // x-y that is used in range
 {
 public:
   range_random_regex_node_(char from, char to);
-  void generate(std::ostream& os) const override;
+  void generate(std::ostream& os, random_generator_base& random_gen) const override;
 
   char get_from() const {return from_;}
   char get_to() const {return to_;}

@@ -8,11 +8,10 @@ optional_regex_node_::optional_regex_node_(regex_node_* node)
   //
 }
 
-void optional_regex_node_::generate(std::ostream& os) const
+void optional_regex_node_::generate(std::ostream& os, random_generator_base& random_gen) const
 {
-  srand(time(NULL)); // TODO add option to provide random seed
-  if(rand()%2)
+  if(random_gen.get_random(0, 1))
   {
-    node_->generate(os);
+    node_->generate(os, random_gen);
   }
 }

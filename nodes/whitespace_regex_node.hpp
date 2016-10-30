@@ -10,7 +10,7 @@ class whitespace_regex_node_ : public regex_node_ // match any whitespace charac
 {
 public:
   whitespace_regex_node_();
-  void generate(std::ostream& os) const override;
+  void generate(std::ostream& os, random_generator_base& random_gen) const override;
 
 private:
   std::vector<char> whitespaces_; // TODO provide whitespaces by reference or a callback (amount, getter)...

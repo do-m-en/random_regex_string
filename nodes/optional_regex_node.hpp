@@ -10,7 +10,7 @@ class optional_regex_node_ : public regex_node_ // ?
 {
 public:
   optional_regex_node_(regex_node_* node);
-  void generate(std::ostream& os) const override;
+  void generate(std::ostream& os, random_generator_base& random_gen) const override;
 
 private:
   std::unique_ptr<regex_node_> node_;

@@ -769,14 +769,6 @@ regex_template::regex_template(const std::string& regex)
 
 void regex_template::generate(std::ostream& os) const
 {
-  root_node_->generate(os);
-}
-
-std::string generate(const regex_template& gen)
-{
-  std::stringstream ss;
-
-  gen.generate(ss);
-
-  return ss.str();
+  random_generator<> rand; // TODO should be provided from the outside
+  root_node_->generate(os, rand);
 }

@@ -9,10 +9,10 @@ repeat_regex_node_::repeat_regex_node_(regex_node_* node, std::size_t repeat)
   //
 }
 
-void repeat_regex_node_::generate(std::ostream& os) const
+void repeat_regex_node_::generate(std::ostream& os, random_generator_base& random_gen) const
 {
   for(std::size_t i=0; i<repeat_; ++i)
   {
-    node_->generate(os);
+    node_->generate(os, random_gen);
   }
 }

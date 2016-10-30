@@ -10,7 +10,7 @@ class repeat_range_regex_node_ : public regex_node_ // {x,y}
 {
 public:
   repeat_range_regex_node_(regex_node_* node, std::size_t min, std::size_t max = 10); // TODO 10 should be a parameter
-  void generate(std::ostream& os) const override;
+  void generate(std::ostream& os, random_generator_base& random_gen) const override;
 
 private:
   std::unique_ptr<regex_node_> node_;

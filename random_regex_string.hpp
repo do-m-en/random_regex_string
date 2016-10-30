@@ -41,6 +41,7 @@ class regex_template
 public:
   regex_template(const std::string& regex);
 //  std::string generate(std::function<std::string(/*TODO*/)> unicode_to_encoding) const;
+
   void generate(std::ostream& os) const; /// TODO add nothrow edition
 
 private:
