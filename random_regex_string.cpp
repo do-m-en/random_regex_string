@@ -1,21 +1,22 @@
 #include "random_regex_string.hpp"
 
-#include <ctime>
-#include <cstdlib>
-#include <memory>
-#include <sstream>
-#include <random>
 #include <algorithm>
+#include <cstdlib>
+#include <ctime>
+#include <limits>
+#include <memory>
+#include <random>
+#include <sstream>
 
 #include "group_regex_node.hpp"
-#include "or_regex_node.hpp"
-#include "range_random_regex_node.hpp"
-#include "random_regex_node.hpp"
-#include "optional_regex_node.hpp"
-#include "repeat_regex_node.hpp"
-#include "repeat_range_regex_node.hpp"
-#include "whitespace_regex_node.hpp"
 #include "literal_regex_node.hpp"
+#include "optional_regex_node.hpp"
+#include "or_regex_node.hpp"
+#include "random_regex_node.hpp"
+#include "range_random_regex_node.hpp"
+#include "repeat_range_regex_node.hpp"
+#include "repeat_regex_node.hpp"
+#include "whitespace_regex_node.hpp"
 
 using rand_regex::regex_node_;
 using rand_regex::group_regex_node_;
@@ -227,34 +228,30 @@ regex_node_* parser_factor(std::experimental::string_view regex, std::size_t& co
 {
   regex_node_* node = parser_base(regex, consumed);
 
-  if(consumed < regex.size() && regex[consumed] == '*')
-  {
-    node = new repeat_range_regex_node_(node, 0);
+  auto repeat_range_zero = parser{'*', [node](auto regex, auto& consumed){
+          consumed = regex.find_first_not_of('*', consumed);
+          return new repeat_range_regex_node_(node, 0);
+        }};
+  auto repeat_range_one = parser{'+', [node](auto regex, auto& consumed){
+          // ++ is posessive but for the sake of generation it doesn't make any
+          // difference as it may always match one or more times...
+          consumed = regex.find_first_not_of('+', consumed);
+          return new repeat_range_regex_node_(node, 1);
+        }};
+  auto optional_item = parser{'?', [node](auto regex, auto& consumed){
+          // ? is gready 0 or 1, ?? is lazy 0 or 1 matching as few times as possible
+          // so for generation sake it doesn't make any difference as it may always
+          // match 0 or 1 times
+          consumed = regex.find_first_not_of('?', consumed);
+          return new optional_regex_node_(node);
+        }};
 
-    consumed = regex.find_first_not_of('*', consumed);
-  }
-
-  if(consumed < regex.size() && regex[consumed] == '+')
-  {
-    node = new repeat_range_regex_node_(node, 1);
-
-    // ++ is posessive but for the sake of generation it doesn't make any
-    // difference as it may always match one or more times...
-    consumed = regex.find_first_not_of('+', consumed);
-  }
-
-  if(consumed < regex.size() && regex[consumed] == '?')
-  {
-    node = new optional_regex_node_(node);
-
-    // ? is gready 0 or 1, ?? is lazy 0 or 1 matching as few times as possible
-    // so for generation sake it doesn't make any difference as it may always
-    // match 0 or 1 times
-    consumed = regex.find_first_not_of('?', consumed);
-  }
+  repeat_range_zero(regex, consumed);
+  repeat_range_one(regex, consumed);
+  optional_item(regex, consumed);
 
   auto digit_parser = [](auto regex, auto& consumed){
-        std::size_t end = regex.find_first_not_of("0123456789", consumed);
+        std::size_t end = regex.find_first_not_of("0123456789", consumed); // TODO find in range 0-9 would be nice...
 
         if(end == std::experimental::string_view::npos)
           throw 1; // TODO exception
@@ -309,132 +306,6 @@ regex_node_* parser_factor(std::experimental::string_view regex, std::size_t& co
   return node;
 }
 
-/*
-regex_node_* parser_factor(const std::string& regex, std::size_t& consumed)
-{
-  regex_node_* node = parser_base(regex, consumed);
-
-  auto repeat_range_zero = parser{'*', [truncate, node](auto& regex, auto& consumed){
-          truncate(regex, consumed, '*');
-          return new repeat_range_regex_node_(node, 0);
-        }};
-  auto repeat_range_one = parser{'+', [truncate, node](auto& regex, auto& consumed){
-          // ++ is posessive but for the sake of generation it doesn't make any
-          // difference as it may always match one or more times...
-          truncate(regex, consumed, '+');
-          return new repeat_range_regex_node_(node, 1);
-        }};
-  auto optional_item = parser{'?', [truncate, node](auto& regex, auto& consumed){
-          // ? is gready 0 or 1, ?? is lazy 0 or 1 matching as few times as possible
-          // so for generation sake it doesn't make any difference as it may always
-          // match 0 or 1 times
-          truncate(regex, consumed, '?');
-          return new optional_regex_node_(node);
-        }};
-
-  auto digit_parser = [](auto& regex, auto& consumed){
-            while(regex.size() > consumed && isdigit(regex[consumed]))
-            {
-              ++consumed;
-            }
-        };
-
-  or_parser parser_factor__{
-      {repeat_range_zero,
-      repeat_range_one,
-      optional_item},
-      [&node, digit_parser](auto& regex, auto& consumed) {
-          if(consumed < regex.size() && regex[consumed] == '{')
-          {
-            ++consumed; // consume {
-            std::size_t begin = consumed;
-            digit_parser(regex, consumed);
-
-            if(consumed < regex.size() && regex[consumed] == ',')
-            {
-              std::size_t min = 0;
-
-              if(begin != consumed)
-              {
-                std::string number(regex.substr(begin, consumed-begin));
-                if(std::all_of(number.begin(), number.end(), ::isdigit))
-                {
-                  min = std::stoi(number);
-                }
-                else
-                {
-                  /// TODO handle exception
-                  throw 1;
-                }
-              }
-              else
-              {
-                /// TODO handle exception
-                throw 1; // syntax x{,y} is not supported
-              }
-
-              begin = ++consumed;
-              while(regex.size() > consumed && isdigit(regex[consumed]))
-              {
-                ++consumed;
-              }
-
-              if(regex.size() > consumed && regex[consumed] == '}')
-              {
-                if(begin != consumed)
-                {
-                  std::string number(regex.substr(begin, consumed-begin));
-                  if(std::all_of(number.begin(), number.end(), ::isdigit))
-                  {
-                    node = new repeat_range_regex_node_(node, min, std::stoi(number));
-                  }
-                  else
-                  {
-                    /// TODO handle exception
-                    throw 1;
-                  }
-                }
-                else
-                {
-                  node = new repeat_range_regex_node_(node, min);
-                }
-              }
-              else
-              {
-                /// TODO error handling
-                throw 1;
-              }
-            }
-            else if(begin != consumed && regex.size() > consumed && regex[consumed] == '}')
-            {
-              std::string number(regex.substr(begin, consumed - begin));
-              if(std::all_of(number.begin(), number.end(), ::isdigit))
-              {
-                node = new repeat_regex_node_(node, std::stoi(number));
-              }
-              else
-              {
-                /// TODO handle exception
-                throw 1;
-              }
-            }
-            else
-            {
-              /// TODO error handling
-              throw 1;
-            }
-            ++consumed; // consume }
-          }
-
-          return node;
-        }
-    };
-
-  return parser_factor__(regex, consumed);
-}
-*/
-
-#include <limits> // TODO move to the top
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
 regex_node_* parser_base(std::experimental::string_view regex, std::size_t& consumed)
 {

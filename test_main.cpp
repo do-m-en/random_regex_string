@@ -2,8 +2,114 @@
 #include <string>
 #include <regex>
 #include <set>
+#include <random>
+#include <limits>
 #include "unicode/blocks.hpp" // TODO this should probbably be moved to random_regex_string as base? or not as ascii could also be supported...
 #include "random_regex_string.hpp"
+
+namespace {
+  enum class test_result {
+      OK,
+      regex_error_and_failed_OK,
+      regex_OK_generated_error,
+      regex_OK_parsing_failed,
+      regex_error_but_parsing_passed
+    };
+
+  std::pair<test_result, std::string> execute_regex(std::experimental::string_view regex)
+  {
+    try
+    {
+      rand_regex::regex_template generator(regex);
+      std::set<std::string> distinct;
+
+      try
+      {      
+        std::regex rx(regex.data(), regex.size()); // FIXME missing string_view constructor...
+
+        for(int j=0; j<10; ++j)
+        {
+          std::stringstream ss;
+          generator.generate(ss);
+
+          std::string result(ss.str());
+
+          if(!std::regex_match(result, rx))
+          {
+            return std::make_pair(test_result::regex_OK_generated_error, result);
+          }
+
+          distinct.insert(result);
+        }
+      }
+      catch(const std::exception& e)
+      {
+        return std::make_pair(test_result::regex_error_but_parsing_passed, "");
+      }
+    }
+    catch(...)
+    {
+      try
+      {      
+        std::regex rx(regex.data(), regex.size()); // FIXME missing string_view constructor...
+      }
+      catch(...)
+      {
+        return std::make_pair(test_result::regex_error_and_failed_OK, "");
+      }
+
+      return std::make_pair(test_result::regex_OK_parsing_failed, "");
+    }
+
+    return std::make_pair(test_result::OK, "");
+  }
+
+  void simplify_regex()
+  {
+  }
+
+  void test_regex_ECMAScript_fuzzer()
+  {
+    int max = 1000;
+
+    std::random_device rd;
+    std::mt19937 mt(rd());
+
+    for(int i=0; i<max; ++i)
+    {
+      std::uniform_int_distribution<int> length_dist(20, 200);
+      std::uniform_int_distribution<char> char_dist(std::numeric_limits<char>::min(), std::numeric_limits<char>::max());
+      std::string regex;
+
+      for(int length = length_dist(mt); length >= 0; --length)
+      {
+        regex += char_dist(mt);
+      }
+
+      std::cout << "fuzzed regex='" << regex << "'" << std::endl;
+
+      auto result = execute_regex(regex);
+      switch(result.first)
+      {
+      case test_result::OK:
+        std::cout << "  valid and passed - OK!\n";
+        break;
+      case test_result::regex_error_and_failed_OK:
+        std::cout << "  not valid and failed - OK!\n";
+        break;
+      case test_result::regex_error_but_parsing_passed:
+        std::cout << "  not valid but passed!\n";
+        throw 1; // TODO
+      case test_result::regex_OK_generated_error:
+        std::cout << "    ERROR! result='" << result.second << "'\n";
+        throw std::runtime_error("regex test failed!");
+      case test_result::regex_OK_parsing_failed:
+        std::cout << "  valid but failed!\n";
+        throw 1; // TODO
+      }
+    }
+  }
+}
 
 namespace {
   void test_regex_ECMAScript(const std::string& regex)
@@ -75,6 +181,7 @@ int main()
     test_regex_ECMAScript("[^a-c]*");
     test_regex_ECMAScript("[^a-z0-9x]*");
     test_regex_ECMAScript("[^b-cd-eg-mh-ij-ls-vr-t]*");
+    test_regex_ECMAScript_fuzzer();
     // TODO add negative cases... TODO also check if they realy are invalid
     // []
     // [z-a]
