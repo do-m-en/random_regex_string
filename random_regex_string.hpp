@@ -10,36 +10,10 @@
 
 namespace rand_regex {
 
-/*
-class repeat_posessive_regex_node_ : public regex_node_ // *+ TODO Should I delete this one and make it an error? (no need as the generator will always step back)
-{
-public:
-  repeat_posessive_regex_node_(regex_node_* node, regex_node_* next_node);
-  void generate(std::ostream& os) const override;
-
-private:
-  std::unique_ptr<regex_node_> node_;
-  std::unique_ptr<regex_node_> next_node_; // optional as it could be the end of regex
-};
-
-class inclusive_regex_node_ : public regex_node_ // \p{...}
-{
-public:
-  inclusive_regex_node_();
-  void generate(std::ostream& os) const override;
-};
-
-class exclusive_regex_node_ : public regex_node_ // \P{...}
-{
-public:
-  exclusive_regex_node_();
-  void generate(std::ostream& os) const override;
-};*/
-
 class regex_template
 {
 public:
-  regex_template(const std::string& regex);
+  regex_template(std::experimental::string_view regex);
 //  std::string generate(std::function<std::string(/*TODO*/)> unicode_to_encoding) const;
 
   void generate(std::ostream& os) const; /// TODO add nothrow edition
