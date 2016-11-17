@@ -7,6 +7,7 @@
 #include <memory>
 #include <random>
 #include <sstream>
+#include <functional>
 
 #include "captured_group_reference_node.hpp"
 #include "group_regex_node.hpp"
