@@ -9,17 +9,6 @@
 #include <sstream>
 #include <functional>
 
-#include "captured_group_reference_node.hpp"
-#include "group_regex_node.hpp"
-#include "literal_regex_node.hpp"
-#include "optional_regex_node.hpp"
-#include "or_regex_node.hpp"
-#include "random_regex_node.hpp"
-#include "range_random_regex_node.hpp"
-#include "repeat_range_regex_node.hpp"
-#include "repeat_regex_node.hpp"
-#include "whitespace_regex_node.hpp"
-
 using rand_regex::captured_group_reference_node_;
 using rand_regex::group_regex_node_;
 using rand_regex::literal_regex_node_;
@@ -60,20 +49,24 @@ private:
   const std::size_t sz_;
 };*/
 
+
+using regex_consumer_function = std::function<regex_node_* (std::experimental::string_view regex, std::size_t& consumed, std::vector<regex_node_*>& captured_groups, regex_node_* previous_node)>;
+
+
 // class regex_template
 using rand_regex::regex_template;
 
 struct parser
 {
 public:
-  parser(char start_token, std::function<regex_node_* (std::experimental::string_view regex, std::size_t& consumed, std::vector<regex_node_*>& captured_groups, regex_node_* previous_node)> consumer)
+  parser(char start_token, regex_consumer_function consumer)
     : start_tokens_{{start_token}}
     , consumer_{consumer}
   {
     //
   }
 
-  parser(std::vector<char> start_tokens, std::function<regex_node_* (std::experimental::string_view regex, std::size_t& consumed, std::vector<regex_node_*>& captured_groups, regex_node_* previous_node)> consumer)
+  parser(std::vector<char> start_tokens, regex_consumer_function consumer)
     : start_tokens_{std::forward<std::vector<char>>(start_tokens)}
     , consumer_{consumer}
   {
@@ -112,15 +105,14 @@ public:
 
 private:
   std::vector<char> start_tokens_;
-  std::function<regex_node_* (std::experimental::string_view regex, std::size_t& consumed,
-    std::vector<regex_node_*>& captured_groups, regex_node_* previous_node)> consumer_;
+  regex_consumer_function consumer_;
 };
 
 struct and_parser
 {
 public:
   and_parser(std::initializer_list<parser> and_parsers, char terminator,
-        std::function<regex_node_* (std::experimental::string_view regex, std::size_t& consumed, std::vector<regex_node_*>& captured_groups, regex_node_* previous_node)> else_parser = nullptr)
+        regex_consumer_function else_parser = nullptr)
     : parsers_{and_parsers}, terminator_{terminator}, else_parser_{else_parser} {}
 
   // TODO this should be optional return value
@@ -169,8 +161,7 @@ public:
 
 private:
   std::vector<parser> parsers_;
-  std::function<regex_node_* (std::experimental::string_view regex, std::size_t& consumed,
-    std::vector<regex_node_*>& captured_groups, regex_node_* previous_node)> else_parser_; // TODO define signature...
+  regex_consumer_function else_parser_;
   char terminator_;
 };
 
@@ -178,7 +169,7 @@ struct or_parser
 {
 public:
   or_parser(std::initializer_list<parser> or_parsers,
-      std::function<regex_node_* (std::experimental::string_view regex, std::size_t& consumed, std::vector<regex_node_*>& captured_groups, regex_node_* previous_node)> else_parser = nullptr
+      regex_consumer_function else_parser = nullptr
     ) : or_parsers_{or_parsers}, else_parser_{else_parser} {}
 
   regex_node_* operator()(std::experimental::string_view regex, std::size_t& consumed,
@@ -202,8 +193,7 @@ public:
   }
 private:
   std::vector<parser> or_parsers_;
-  std::function<regex_node_* (std::experimental::string_view regex, std::size_t& consumed,
-    std::vector<regex_node_*>& captured_groups, regex_node_* previous_node)> else_parser_;
+  regex_consumer_function else_parser_;
 };
 
 regex_node_* parser_term(std::experimental::string_view regex, std::size_t& consumed,
@@ -730,9 +720,21 @@ regex_template::regex_template(std::experimental::string_view regex)
   }
 }
 
+#include <iostream>
 void regex_template::generate(std::ostream& os) const
 {
   random_generator<> rand; // TODO should be provided from the outside
+
+//---------------------------------
+/*  regex_variant testv_{whitespace_regex_node_()};
+std::cout << '\'';
+std::visit([&](auto&& n){std::stringstream ss; n.generate(ss, rand); std::cout << ss.str();}, testv_);*/
+/*  auto& tmp_n = std::get<whitespace_regex_node_>(testv_);
+  std::stringstream ss;
+  tmp_n.generate(ss, rand);*/
+//    std::cout << "v.index = " << v.index() << '\n';
+//std::cout << "'\n";
+//---------------------------------
 
   if(root_node_.get()) // TODO this if could be changed for dummy regex node
     root_node_->generate(os, rand);
