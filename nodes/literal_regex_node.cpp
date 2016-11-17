@@ -8,7 +8,13 @@ literal_regex_node_::literal_regex_node_(char literal)
   //
 }
 
-void literal_regex_node_::generate(std::ostream& os, random_generator_base& /*random_gen*/) const
+void literal_regex_node_::generate(std::ostream& os, random_generator_base& /*random_gen*/)
+{
+  os << literal_;
+}
+
+
+void literal_regex_node_::regenerate(std::ostream& os) const
 {
   os << literal_;
 }

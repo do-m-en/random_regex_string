@@ -13,7 +13,13 @@ whitespace_regex_node_::whitespace_regex_node_()
   whitespaces_.push_back(' ');
 }
 
-void whitespace_regex_node_::generate(std::ostream& os, random_generator_base& random_gen) const
+void whitespace_regex_node_::generate(std::ostream& os, random_generator_base& random_gen)
 {
-  os << whitespaces_[random_gen.get_random(0, whitespaces_.size() - 1)];
+  random_value_ = random_gen.get_random(0, whitespaces_.size() - 1);
+  os << whitespaces_[random_value_];
+}
+
+void whitespace_regex_node_::regenerate(std::ostream& os) const
+{
+  os << whitespaces_[random_value_];
 }
