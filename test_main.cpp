@@ -5,6 +5,7 @@
 #include <random>
 #include <limits>
 #include <cctype>
+#include <string_view>
 #include "unicode/blocks.hpp" // TODO this should probbably be moved to random_regex_string as base? or not as ascii could also be supported...
 #include "random_regex_string.hpp"
 
@@ -17,7 +18,7 @@ namespace {
       regex_error_but_parsing_passed
     };
 
-  std::pair<test_result, std::string> execute_regex(std::experimental::string_view regex)
+  std::pair<test_result, std::string> execute_regex(std::string_view regex)
   {
     try
     {
@@ -63,9 +64,9 @@ namespace {
     return std::make_pair(test_result::OK, "");
   }
 
-  std::pair<std::experimental::string_view, std::string> simplify_regex(std::experimental::string_view regex, test_result reproducing_result)
+  std::pair<std::string_view, std::string> simplify_regex(std::string_view regex, test_result reproducing_result)
   {
-    std::experimental::string_view working_regex{regex};
+    std::string_view working_regex{regex};
     std::string simplified_result;
 
     // subdivide untill it no longer matches
@@ -74,7 +75,7 @@ namespace {
       if(working_regex.size() == 1) // prevent cycling
         break;
 
-      std::experimental::string_view current_regex{working_regex.substr(0, working_regex.size()/2)};
+      std::string_view current_regex{working_regex.substr(0, working_regex.size()/2)};
       auto result = execute_regex(current_regex);
       if(reproducing_result == result.first)
       {
@@ -103,7 +104,7 @@ namespace {
       if(working_regex.size() == 1) // prevent cycling
         break;
 
-      std::experimental::string_view current_regex{working_regex.substr(0, working_regex.size()-1)};
+      std::string_view current_regex{working_regex.substr(0, working_regex.size()-1)};
       auto result = execute_regex(current_regex);
       if(reproducing_result == result.first)
       {
@@ -121,7 +122,7 @@ namespace {
       if(working_regex.size() == 1) // prevent cycling
         break;
 
-      std::experimental::string_view current_regex{working_regex.substr(1)};
+      std::string_view current_regex{working_regex.substr(1)};
       auto result = execute_regex(current_regex);
       if(reproducing_result == result.first)
       {
@@ -152,7 +153,7 @@ namespace {
     return std::make_pair(final_regex, simplified_result);
   }
 
-  std::string convert_chars_to_visible(std::experimental::string_view input)
+  std::string convert_chars_to_visible(std::string_view input)
   {
     std::string converted;
 
