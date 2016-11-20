@@ -20,7 +20,7 @@ add_library(${PROJECT_NAME}
 
   unicode/blocks.cpp
 )
-target_include_directories(${PROJECT_NAME} PUBLIC ./nodes)
+target_include_directories(${PROJECT_NAME} PUBLIC ./nodes ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_rrs test_main.cpp)
 target_include_directories(test_rrs PUBLIC ./nodes)
