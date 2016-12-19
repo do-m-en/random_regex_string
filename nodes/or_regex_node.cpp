@@ -18,8 +18,6 @@ or_regex_node_::or_regex_node_(std::initializer_list<regex_node_*> list)
     {
       or_nodes_.reserve(or_nodes_.size() + or_node->or_nodes_.size());
       std::move(std::begin(or_node->or_nodes_), std::end(or_node->or_nodes_), std::back_inserter(or_nodes_));
-
-      delete or_node;
     }
     else
     {
@@ -34,8 +32,6 @@ void or_regex_node_::append(regex_node_* item)
   {
     or_nodes_.reserve(or_nodes_.size() + or_node->or_nodes_.size());
     std::move(std::begin(or_node->or_nodes_), std::end(or_node->or_nodes_), std::back_inserter(or_nodes_));
-
-    delete or_node;
   }
   else
   {

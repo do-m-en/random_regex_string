@@ -2,7 +2,8 @@
 #define RANDOM_REGEX_STRING_HPP_INCLUDED
 
 #include <string_view>
-#include <memory>
+#include <vector>
+#include "data_containers.hpp"
 
 namespace rand_regex {
 
@@ -18,7 +19,7 @@ public:
   void generate(std::ostream& os) const; /// TODO add nothrow edition
 
 private:
-  std::unique_ptr<regex_node_> root_node_;
+  std::vector<std::tuple<regex_node_*, regex_variant>> nodes_;
 };
 
 

@@ -8,6 +8,7 @@
 #include <random>
 #include <sstream>
 #include <functional>
+#include <iterator>
 
 #include "captured_group_reference_node.hpp"
 #include "group_regex_node.hpp"
@@ -20,7 +21,6 @@
 #include "repeat_regex_node.hpp"
 #include "whitespace_regex_node.hpp"
 
-#include "data_containers.hpp"
 using rand_regex::regex_variant;
 
 using rand_regex::captured_group_reference_node_;
@@ -198,8 +198,6 @@ public:
         else
         {
           //throw 1; // TODO throw no match found exception
-          for(auto& node : nodes)
-            delete std::get<0>(node);
 
           throw 1;
         }
@@ -282,7 +280,11 @@ std::vector<parse_result> parser_regex(regex_param& param)
     }
 
     if(!nodes.empty())
-      nodes.emplace_back(new or_regex_node_{std::get<0>(nodes.back()), std::get<0>(others.back())}, rand_regex::or_regex_node_s());
+    {
+      std::size_t tmp = nodes.size() - 1;
+      std::move(others.begin(), others.end(), std::back_inserter(nodes));
+      nodes.emplace_back(new or_regex_node_{std::get<0>(nodes[tmp]), std::get<0>(nodes.back())}, rand_regex::or_regex_node_s());
+    }
     else
       nodes = others;
 
@@ -304,7 +306,9 @@ std::vector<parse_result> parser_term(regex_param& param)
     && param.regex[param.consumed] != '|')
   {
     auto next = parser_factor(param);
-    nodes.emplace_back(new group_regex_node_(std::vector<regex_node_*>{std::get<0>(nodes.back()), std::get<0>(next.back())}), rand_regex::group_regex_node_s()); // TODO consider renaming it to sequence
+    std::size_t tmp = nodes.size() - 1;
+    std::move(next.begin(), next.end(), std::back_inserter(nodes));
+    nodes.emplace_back(new group_regex_node_(std::vector<regex_node_*>{std::get<0>(nodes[tmp]), std::get<0>(nodes.back())}), rand_regex::group_regex_node_s()); // TODO consider renaming it to sequence
   }
 
   return nodes;
@@ -616,8 +620,6 @@ std::vector<parse_result> parser_base(regex_param& param)
           tmp_nodes = std::vector<parse_result>{parse_result(new range_random_regex_node_(literal_node->getLiteral(),
                                                               static_cast<literal_regex_node_*>(std::get<0>(tmp.back()))->getLiteral()),
                                   rand_regex::range_random_regex_node_s())}; // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
-          delete std::get<0>(tmp.back());
-          delete literal_node;
         }
 
         return tmp_nodes;
@@ -639,8 +641,6 @@ std::vector<parse_result> parser_base(regex_param& param)
               ranges.emplace_back(lit->getLiteral(), lit->getLiteral());
             else if(auto range = dynamic_cast<range_random_regex_node_*>(std::get<0>(element)))
               ranges.emplace_back(range->get_from(), range->get_to());
-
-            delete std::get<0>(element);
           }
 
           // handle single range case
@@ -817,7 +817,7 @@ std::vector<parse_result> parser_base(regex_param& param)
 
   return parser_base_type(param);
 }
-
+#include <iostream> // TODO delete
 regex_template::regex_template(std::string_view regex)
 {
   if(regex.size())
@@ -828,7 +828,13 @@ regex_template::regex_template(std::string_view regex)
     {
       regex_param param{regex};
       param.consumed = consumed;
-      root_node_.reset(std::get<0>(parser_regex(param).back()));
+      nodes_ = parser_regex(param);
+      std::cout << "\ncount: " << nodes_.size() << '\n';
+
+      for(auto& node : nodes_)
+        std::cout << std::get<0>(node)->name() << '\n';
+
+      std::cout << '\n';
 
       /// TODO in some cases this is also true: regex.size() < consumed (check why???)
       if(param.regex.size() > param.consumed)
@@ -855,6 +861,6 @@ std::visit([&](auto&& n){std::stringstream ss; n.generate(ss, rand); std::cout <
 //std::cout << "'\n";
 //---------------------------------
 
-  if(root_node_.get()) // TODO this if could be changed for dummy regex node
-    root_node_->generate(os, rand);
+  if(nodes_.size()) // TODO this if could be changed for dummy regex node
+    std::get<0>(nodes_.back())->generate(os, rand);
 }
