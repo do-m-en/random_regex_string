@@ -12,6 +12,7 @@ public:
   optional_regex_node_(regex_node_* node);
   void generate(std::ostream& os, random_generator_base& random_gen) override;
   void regenerate(std::ostream& os) const override;
+  std::string name() const override {return "optional_regex_node_";}
 
 private:
   std::unique_ptr<regex_node_> node_;

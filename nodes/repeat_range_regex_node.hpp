@@ -12,6 +12,7 @@ public:
   repeat_range_regex_node_(regex_node_* node, std::size_t min, std::size_t max = 10); // TODO 10 should be a parameter
   void generate(std::ostream& os, random_generator_base& random_gen) override;
   void regenerate(std::ostream& os) const override;
+  std::string name() const override {return "repeat_range_regex_node_";}
 
 private:
   std::unique_ptr<regex_node_> node_;

@@ -10,6 +10,7 @@ class whitespace_regex_node_ : public regex_node_ // match any whitespace charac
 public:
   void generate(std::ostream& os, random_generator_base& random_gen) override;
   void regenerate(std::ostream& os) const override;
+  std::string name() const override {return "whitespace_regex_node_";}
 
 private:
   int random_value_;

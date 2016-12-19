@@ -12,6 +12,7 @@ public:
   range_random_regex_node_(char from, char to);
   void generate(std::ostream& os, random_generator_base& random_gen) override;
   void regenerate(std::ostream& os) const override;
+  std::string name() const override {return "range_random_regex_node_";}
 
   char get_from() const {return from_;}
   char get_to() const {return to_;}

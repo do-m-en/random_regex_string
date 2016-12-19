@@ -3,6 +3,7 @@
 
 #include <ostream>
 #include <random>
+#include <string>
 
 namespace rand_regex {
 
@@ -34,6 +35,7 @@ class regex_node_
 public:
   virtual void generate(std::ostream& os, random_generator_base& random_gen) {} // default for dummy node
   virtual void regenerate(std::ostream& os) const {} // default for dummy node
+  virtual std::string name() const {return "regex_node_";}
 };
 
 };

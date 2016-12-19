@@ -14,6 +14,7 @@ public:
   void append(regex_node_* item);
   void generate(std::ostream& os, random_generator_base& random_gen) override;
   void regenerate(std::ostream& os) const override;
+  std::string name() const override {return "or_regex_node_";}
 
 private:
   std::vector<regex_node_*> or_nodes_; // TODO should be a unique ptr...
