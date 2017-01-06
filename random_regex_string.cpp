@@ -9,6 +9,7 @@
 #include <sstream>
 #include <functional>
 #include <iterator>
+#include <numeric>
 
 #include "captured_group_reference_node.hpp"
 #include "group_regex_node.hpp"
@@ -20,8 +21,6 @@
 #include "repeat_range_regex_node.hpp"
 #include "repeat_regex_node.hpp"
 #include "whitespace_regex_node.hpp"
-
-using rand_regex::regex_variant;
 
 using rand_regex::captured_group_reference_node_;
 using rand_regex::group_regex_node_;
@@ -70,14 +69,12 @@ struct regex_param
 
   std::string_view regex;
   std::size_t consumed = 0;
-  std::vector<regex_node_*> captured_groups;
-  regex_node_* previous_node = nullptr;
+  std::vector<int> captured_groups;
 
-  // experimental
-  std::vector<regex_variant> nodes;
+  std::size_t last_index = 0;
 };
 
-using parse_result = std::tuple<regex_node_*, regex_variant>;
+using parse_result = regex_node_*;
 using regex_consumer_function = std::function<std::vector<parse_result> (regex_param&)>;
 
 template <typename Tuple, typename F, std::size_t ...Indices>
@@ -262,15 +259,19 @@ private:
 std::vector<parse_result> parser_term(regex_param& param);
 std::vector<parse_result> parser_factor(regex_param& param);
 std::vector<parse_result> parser_base(regex_param& param);
-
+#include <iostream>
 // <regex> ::= <term> '|' <regex> | <term>
 std::vector<parse_result> parser_regex(regex_param& param)
 {
-  std::vector<parse_result> nodes;
+  std::vector<parse_result> nodes{new or_regex_node_{}}; // TODO remove or node if single node
+  ++param.last_index;
 
   while(param.consumed < param.regex.size())
   {
-    auto others = (param.regex[param.consumed] != '|' ? parser_term(param) : std::vector<parse_result>{parse_result(new regex_node_{}, rand_regex::empty_node_s())}); // term or empty node
+    if(param.regex[param.consumed] == '|')
+      ++param.last_index;
+
+    auto others = (param.regex[param.consumed] != '|' ? parser_term(param) : std::vector<parse_result>{new regex_node_{}}); // term or empty node
 
     if(others.empty())
     {
@@ -279,14 +280,8 @@ std::vector<parse_result> parser_regex(regex_param& param)
       break;
     }
 
-    if(!nodes.empty())
-    {
-      std::size_t tmp = nodes.size() - 1;
-      std::move(others.begin(), others.end(), std::back_inserter(nodes));
-      nodes.emplace_back(new or_regex_node_{std::get<0>(nodes[tmp]), std::get<0>(nodes.back())}, rand_regex::or_regex_node_s());
-    }
-    else
-      nodes = others;
+    std::move(others.begin(), others.end(), std::back_inserter(nodes));
+    static_cast<or_regex_node_*>(nodes[0])->append(others.size());
 
     if(param.consumed == param.regex.size() || param.regex[param.consumed] != '|')
       break;
@@ -300,7 +295,10 @@ std::vector<parse_result> parser_regex(regex_param& param)
 // <term> ::= { <factor> }
 std::vector<parse_result> parser_term(regex_param& param)
 {
-  auto nodes = parser_factor(param);
+//  auto nodes = parser_factor(param);
+
+  std::vector<parse_result> nodes{new group_regex_node_{}}; // TODO remove group node if single node
+  ++param.last_index;
 
   while(param.consumed < param.regex.size() && param.regex[param.consumed] != ')'
     && param.regex[param.consumed] != '|')
@@ -308,7 +306,7 @@ std::vector<parse_result> parser_term(regex_param& param)
     auto next = parser_factor(param);
     std::size_t tmp = nodes.size() - 1;
     std::move(next.begin(), next.end(), std::back_inserter(nodes));
-    nodes.emplace_back(new group_regex_node_(std::vector<regex_node_*>{std::get<0>(nodes[tmp]), std::get<0>(nodes.back())}), rand_regex::group_regex_node_s()); // TODO consider renaming it to sequence
+    static_cast<group_regex_node_*>(nodes[0])->append();
   }
 
   return nodes;
@@ -317,22 +315,24 @@ std::vector<parse_result> parser_term(regex_param& param)
 // <factor> ::= <base> { '*' } | <base> { '+' } | <base> { '?' } | <base> { '{}' }
 std::vector<parse_result> parser_factor(regex_param& param)
 {
-  if(param.regex.size() == param.consumed)
+  if(param.regex.size() == param.consumed) // TODO I could probably delete this now
   {
-    return std::vector<parse_result>{parse_result(new regex_node_{}, rand_regex::empty_node_s())}; // empty or
+    ++param.last_index;
+    return std::vector<parse_result>{new regex_node_{}}; // empty or
   }
 
   auto nodes = parser_base(param);
 
-  auto repeat_range_zero = parser{std::make_tuple('*'), [nodes](regex_param& param){
+  auto repeat_range_zero = parser{std::make_tuple('*'), [](regex_param& param){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
             throw 1; // must be perceeded by a character that is not an anchor
 
           param.consumed = param.regex.find_first_not_of('*', param.consumed);
 
-          return std::vector<parse_result>{parse_result(new repeat_range_regex_node_(std::get<0>(nodes.back()), 0), rand_regex::repeat_range_regex_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new repeat_range_regex_node_(0)};
         }};
-  auto repeat_range_one = parser{std::make_tuple('+'), [nodes](regex_param& param){
+  auto repeat_range_one = parser{std::make_tuple('+'), [](regex_param& param){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
             throw 1; // must be perceeded by a character that is not an anchor
 
@@ -340,9 +340,10 @@ std::vector<parse_result> parser_factor(regex_param& param)
           // difference as it may always match one or more times...
           param.consumed = param.regex.find_first_not_of('+', param.consumed);
 
-          return std::vector<parse_result>{parse_result(new repeat_range_regex_node_(std::get<0>(nodes.back()), 1), rand_regex::repeat_range_regex_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new repeat_range_regex_node_(1)};
         }};
-  auto optional_item = parser{std::make_tuple('?'), [nodes](regex_param& param){
+  auto optional_item = parser{std::make_tuple('?'), [](regex_param& param){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
             throw 1; // star must be perceeded by a character that is not an anchor
 
@@ -351,7 +352,8 @@ std::vector<parse_result> parser_factor(regex_param& param)
           // match 0 or 1 times
           param.consumed = param.regex.find_first_not_of('?', param.consumed);
 
-          return std::vector<parse_result>{parse_result(new optional_regex_node_(std::get<0>(nodes.back())), rand_regex::optional_regex_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new optional_regex_node_()};
         }};
 
   repeat_range_zero(param);
@@ -395,13 +397,13 @@ std::vector<parse_result> parser_factor(regex_param& param)
       {
         if(param.regex[param.consumed] == '}')
         {
-          nodes.emplace_back(new repeat_range_regex_node_(std::get<0>(nodes.back()), num),
-                              rand_regex::repeat_range_regex_node_s());
+          ++param.last_index;
+          nodes.insert(nodes.begin(), new repeat_range_regex_node_(num));
         }
         else
         {
-          nodes.emplace_back(new repeat_range_regex_node_(std::get<0>(nodes.back()), num, digit_parser(param)),
-                              rand_regex::repeat_range_regex_node_s());
+          ++param.last_index;
+          nodes.insert(nodes.begin(), new repeat_range_regex_node_(num, digit_parser(param)));
         }
       }
       else
@@ -410,7 +412,8 @@ std::vector<parse_result> parser_factor(regex_param& param)
     }
     else if(param.regex.size() > param.consumed && param.regex[param.consumed] == '}')
     {
-      nodes.emplace_back(new repeat_regex_node_(std::get<0>(nodes.back()), num), rand_regex::repeat_regex_node_s());
+      ++param.last_index;
+      nodes.insert(nodes.begin(), new repeat_regex_node_(num));
     }
     else
       /// TODO error handling
@@ -426,33 +429,41 @@ std::vector<parse_result> parser_factor(regex_param& param)
 std::vector<parse_result> parser_base(regex_param& param)
 {
   auto form_feed = parser{std::make_tuple('f'), [](regex_param& param){
-      return std::vector<parse_result>{parse_result(new literal_regex_node_{'\f'}, rand_regex::literal_regex_node_s())};
+      ++param.last_index;
+      return std::vector<parse_result>{new literal_regex_node_{'\f'}};
     }};
   auto new_line = parser{std::make_tuple('n'), [](regex_param& param){
-      return std::vector<parse_result>{parse_result(new literal_regex_node_{'\n'}, rand_regex::literal_regex_node_s())};
+      ++param.last_index;
+      return std::vector<parse_result>{new literal_regex_node_{'\n'}};
     }};
   auto carriage_return = parser{std::make_tuple('r'), [](regex_param& param){
-      return std::vector<parse_result>{parse_result(new literal_regex_node_{'\r'}, rand_regex::literal_regex_node_s())};
+      ++param.last_index;
+      return std::vector<parse_result>{new literal_regex_node_{'\r'}};
     }};
   auto horizontal_tab = parser{std::make_tuple('t'), [](regex_param& param){
-      return std::vector<parse_result>{parse_result(new literal_regex_node_{'\t'}, rand_regex::literal_regex_node_s())};
+      ++param.last_index;
+      return std::vector<parse_result>{new literal_regex_node_{'\t'}};
     }};
   auto vertical_tab = parser{std::make_tuple('v'), [](regex_param& param){
-      return std::vector<parse_result>{parse_result(new literal_regex_node_{'\v'}, rand_regex::literal_regex_node_s())};
+      return std::vector<parse_result>{new literal_regex_node_{'\v'}};
     }};
   auto any_digit = parser{std::make_tuple('d'), [](regex_param& param){
-      return std::vector<parse_result>{parse_result(new range_random_regex_node_{'0', '9'}, rand_regex::literal_regex_node_s())};
+      ++param.last_index;
+      return std::vector<parse_result>{new range_random_regex_node_{'0', '9'}};
     }};
   auto null_character = parser{std::make_tuple('0'), [](regex_param& param){
-      return std::vector<parse_result>{parse_result(new literal_regex_node_{'\0'}, rand_regex::literal_regex_node_s())};
+      ++param.last_index;
+      return std::vector<parse_result>{new literal_regex_node_{'\0'}};
     }};
   auto any_non_digit = parser{std::make_tuple('D'), [](regex_param& param){
-          return std::vector<parse_result>{parse_result(new or_regex_node_{new range_random_regex_node_{ascii_min, '0' - 1},
-                                    new range_random_regex_node_{'9' + 1, ascii_max}},
-                  rand_regex::or_regex_node_s())};
+          param.last_index += 3;
+          return std::vector<parse_result>{new or_regex_node_{{1, 1}},
+              new range_random_regex_node_{ascii_min, '0' - 1},
+              new range_random_regex_node_{'9' + 1, ascii_max}};
         }};
   auto any_whitespace = parser{std::make_tuple('s'), [](regex_param& param){
-          return std::vector<parse_result>{parse_result(new whitespace_regex_node_{}, rand_regex::whitespace_regex_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new whitespace_regex_node_{}};
         }};
   auto any_non_whitespace = parser{std::make_tuple('S'), [](regex_param& param){
        /* '\t' // tab: 9
@@ -461,25 +472,28 @@ std::vector<parse_result> parser_base(regex_param& param)
           '\f' // formfeed: 12
           '\r' // carriage return: 13
           ' ' // space: 32 */
-          return std::vector<parse_result>{parse_result(new or_regex_node_{new range_random_regex_node_{ascii_min, '\t' - 1},
-                                    new range_random_regex_node_{'\r' + 1, ' ' - 1},
-                                    new range_random_regex_node_{' ' + 1, ascii_max}},
-                  rand_regex::or_regex_node_s())};
+          param.last_index += 4;
+          return std::vector<parse_result>{new or_regex_node_{{1, 1, 1}},
+              new range_random_regex_node_{ascii_min, '\t' - 1},
+              new range_random_regex_node_{'\r' + 1, ' ' - 1},
+              new range_random_regex_node_{' ' + 1, ascii_max}};
         }};
   auto any_alphanum_or_underscore = parser{std::make_tuple('w'), [](regex_param& param) // any alphanumeric characters or _
         {
-          return std::vector<parse_result>{parse_result(new or_regex_node_{new range_random_regex_node_{'a', 'z'},
-                                    new range_random_regex_node_{'0', '9'},
-                                    new literal_regex_node_{'_'}},
-                  rand_regex::or_regex_node_s())};
+          param.last_index += 4;
+          return std::vector<parse_result>{new or_regex_node_{{1, 1, 1}},
+              new range_random_regex_node_{'a', 'z'},
+              new range_random_regex_node_{'0', '9'},
+              new literal_regex_node_{'_'}};
         }};
   auto any_not_alphanum_or_underscore = parser{std::make_tuple('W'), [](regex_param& param){
-          return std::vector<parse_result>{parse_result(new or_regex_node_{new range_random_regex_node_{ascii_min, '0' - 1},
-                                    new range_random_regex_node_{'9' + 1, 'A' - 1},
-                                    new range_random_regex_node_{'Z' + 1, '_' - 1},
-                                    new range_random_regex_node_{'_' + 1, 'a' - 1},
-                                    new range_random_regex_node_{'z' + 1, ascii_max}},
-                  rand_regex::or_regex_node_s())};
+          param.last_index += 6;
+          return std::vector<parse_result>{new or_regex_node_{{1, 1, 1, 1, 1}},
+              new range_random_regex_node_{ascii_min, '0' - 1},
+              new range_random_regex_node_{'9' + 1, 'A' - 1},
+              new range_random_regex_node_{'Z' + 1, '_' - 1},
+              new range_random_regex_node_{'_' + 1, 'a' - 1},
+              new range_random_regex_node_{'z' + 1, ascii_max}};
         }};
   auto hexadecimal_ascii_character_representation = parser{std::make_tuple('x'), [](regex_param& param){ // \x00 to \x7F
           if(param.regex.size() < param.consumed+2 || !::isxdigit((int)param.regex[param.consumed]) || !::isxdigit((int)param.regex[param.consumed+1]))
@@ -492,8 +506,8 @@ std::vector<parse_result> parser_base(regex_param& param)
 
           param.consumed += 2;
 
-          return std::vector<parse_result>{parse_result(new literal_regex_node_(static_cast<char>(ascii_hex)),
-                  rand_regex::literal_regex_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new literal_regex_node_(static_cast<char>(ascii_hex))};
         }};
   auto word_boundary = parser{std::make_tuple('b'), [](regex_param& param){ // not \b
           if(param.regex.size() < param.consumed+1) // case when \b doesn't have a value after it - not valid
@@ -505,7 +519,8 @@ std::vector<parse_result> parser_base(regex_param& param)
           if(!::isspace(param.regex[param.consumed - 3]) && !::isspace(param.regex[param.consumed + 1]))
             throw 1;
 
-          return std::vector<parse_result>{parse_result(new regex_node_(), rand_regex::empty_node_s())}; // TODO remove dummy node as it is useles
+          ++param.last_index;
+          return std::vector<parse_result>{new regex_node_()}; // TODO remove dummy node as it is useles
         }};
   auto not_word_boundary = parser{std::make_tuple('B'), [](regex_param& param){ // not \b
           if(param.regex.size() < param.consumed+1) // case when \B doesn't have a value after it - could cause a partial match
@@ -517,7 +532,8 @@ std::vector<parse_result> parser_base(regex_param& param)
           if(::isspace(param.regex[param.consumed - 3]) || ::isspace(param.regex[param.consumed + 1]))
             throw 1;
 
-          return std::vector<parse_result>{parse_result(new regex_node_(), rand_regex::empty_node_s())}; // TODO remove dummy node as it is useles
+          ++param.last_index;
+          return std::vector<parse_result>{new regex_node_()}; // TODO remove dummy node as it is useles
         }};
   auto backreference_parser = parser{std::make_tuple('1', '2', '3', '4', '5', '6', '7', '8', '9'),
         [](regex_param& param){
@@ -525,13 +541,13 @@ std::vector<parse_result> parser_base(regex_param& param)
 
           int digit = std::stoi(std::string(param.regex.substr(param.consumed-1, end)));
 
-          if(digit > param.captured_groups.size() || param.captured_groups[digit - 1] == nullptr)
+          if(digit > param.captured_groups.size() || param.captured_groups[digit - 1] == -1)
             throw 1; // captured group doesn't exist || capturing group while inside of it
           else
             param.consumed = end;
 
-          return std::vector<parse_result>{parse_result(new captured_group_reference_node_(param.captured_groups[digit - 1]),
-                  rand_regex::captured_group_reference_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new captured_group_reference_node_(param.captured_groups[digit - 1])};
         }};
 
 
@@ -553,16 +569,16 @@ std::vector<parse_result> parser_base(regex_param& param)
       null_character,
       backreference_parser),
       [](regex_param& param){
-          return std::vector<parse_result>{parse_result(new literal_regex_node_(param.regex[param.consumed++]),
-                  rand_regex::literal_regex_node_s())}; // escaped_literal_char
+          ++param.last_index;
+          return std::vector<parse_result>{new literal_regex_node_(param.regex[param.consumed++])}; // escaped_literal_char
         }
     };
 
   or_parser escaped_or_literal {
       std::make_tuple(parser{std::make_tuple('\\'), [parser_escaped](regex_param& param){return parser_escaped(param);}}),
       [](regex_param& param){
-          return std::vector<parse_result>{parse_result(new literal_regex_node_(param.regex[param.consumed++]),
-                  rand_regex::literal_regex_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new literal_regex_node_(param.regex[param.consumed++])};
         }
     };
 
@@ -574,15 +590,16 @@ std::vector<parse_result> parser_base(regex_param& param)
       vertical_tab,
       hexadecimal_ascii_character_representation),
       [](regex_param& param){
-          return std::vector<parse_result>{parse_result(new literal_regex_node_(param.regex[param.consumed++]),
-                  rand_regex::literal_regex_node_s())}; // escaped_literal_char (TODO should non valid escapes be removed? Throwing exception out of them...)
+          ++param.last_index;
+          return std::vector<parse_result>{new literal_regex_node_(param.regex[param.consumed++])}; // escaped_literal_char (TODO should non valid escapes be removed? Throwing exception out of them...)
         }
     };
 
   or_parser end_range_escaped_or_literal {
       std::make_tuple(parser{std::make_tuple('\\'), [parse_end_range_escaped](regex_param& param){return parse_end_range_escaped(param);}}),
       [](regex_param& param){
-          return std::vector<parse_result>{parse_result(new literal_regex_node_(param.regex[param.consumed++]), rand_regex::literal_regex_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new literal_regex_node_(param.regex[param.consumed++])};
         }
     };
 
@@ -600,7 +617,7 @@ std::vector<parse_result> parser_base(regex_param& param)
 
         if(param.consumed+2 < param.regex.size() && param.regex[param.consumed] == '-' && param.regex[param.consumed+1] != ']')
         {
-          literal_regex_node_* literal_node = static_cast<literal_regex_node_*>(std::get<0>(tmp_nodes.back()));
+          literal_regex_node_* literal_node = static_cast<literal_regex_node_*>(tmp_nodes.back());
 
           ++param.consumed;
 
@@ -617,9 +634,9 @@ std::vector<parse_result> parser_base(regex_param& param)
             throw 1;
           }
 
-          tmp_nodes = std::vector<parse_result>{parse_result(new range_random_regex_node_(literal_node->getLiteral(),
-                                                              static_cast<literal_regex_node_*>(std::get<0>(tmp.back()))->getLiteral()),
-                                  rand_regex::range_random_regex_node_s())}; // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
+          ++param.last_index;
+          tmp_nodes = std::vector<parse_result>{new range_random_regex_node_(literal_node->getLiteral(),
+                                                              static_cast<literal_regex_node_*>(tmp.back())->getLiteral())}; // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
         }
 
         return tmp_nodes;
@@ -629,6 +646,8 @@ std::vector<parse_result> parser_base(regex_param& param)
   or_parser range_or_negated_range {
       std::make_tuple(parser{std::make_tuple('^'), [range_parser](regex_param& param){
           auto tmp = range_parser(param);
+
+          param.last_index -= tmp.size();
           // TODO check if range parser returns an empty vector
 
           std::vector<regex_node_*> invert;
@@ -637,9 +656,9 @@ std::vector<parse_result> parser_base(regex_param& param)
           // convert
           for(auto& element : tmp)
           {
-            if(auto lit = dynamic_cast<literal_regex_node_*>(std::get<0>(element)))
+            if(auto lit = dynamic_cast<literal_regex_node_*>(element))
               ranges.emplace_back(lit->getLiteral(), lit->getLiteral());
-            else if(auto range = dynamic_cast<range_random_regex_node_*>(std::get<0>(element)))
+            else if(auto range = dynamic_cast<range_random_regex_node_*>(element))
               ranges.emplace_back(range->get_from(), range->get_to());
           }
 
@@ -735,17 +754,30 @@ std::vector<parse_result> parser_base(regex_param& param)
             }
           }
 
+          std::vector<std::size_t> lenghts;
+          for(std::size_t i = 0; i<invert.size(); ++i)
+          {
+            lenghts.push_back(1);
+          }
+
           ++param.consumed; // consume ]
-          return std::vector<parse_result>{parse_result(new or_regex_node_(std::move(invert)), rand_regex::or_regex_node_s())};
+          invert.insert(invert.begin(), new or_regex_node_(lenghts));
+          param.last_index += invert.size();
+          return invert;
         }}),
       [range_parser](regex_param& param){
           auto tmp_vec = range_parser(param);
-          std::vector<regex_node_*> nodes;
-          for(auto& elem : tmp_vec)
-            nodes.emplace_back(std::get<0>(elem));
-          auto tmp = new or_regex_node_(std::move(nodes)); // TODO check if range parser returns an empty vector
+          std::vector<std::size_t> lenghts;
+          for(std::size_t i = 0; i<tmp_vec.size(); ++i)
+          {
+            lenghts.push_back(1);
+          }
+
+          ++param.last_index;
+          tmp_vec.insert(tmp_vec.begin(), new or_regex_node_(lenghts)); // TODO check if range parser returns an empty vector
+          
           ++param.consumed; // consume ]
-          return std::vector<parse_result>{parse_result(tmp, rand_regex::or_regex_node_s())};
+          return tmp_vec;
         }
     };
 
@@ -758,13 +790,15 @@ std::vector<parse_result> parser_base(regex_param& param)
               if(param.regex[param.consumed] == ')')
               {
                 ++param.consumed;
-                return std::vector<parse_result>{parse_result(new regex_node_(), rand_regex::empty_node_s())}; // empty
+                ++param.last_index;
+                return std::vector<parse_result>{new regex_node_()}; // empty
               }
               else
                 throw 1; // not enough characters...
             }
 
-            int capture_index = -1;
+            std::size_t capture_index = param.last_index;
+            int index = -1;
             if(param.regex[param.consumed] == '?')
             {
               // (?:...) is a non capturing group
@@ -775,7 +809,8 @@ std::vector<parse_result> parser_base(regex_param& param)
                 if(param.regex[param.consumed] == ')') // handle (?:) case
                 {
                   ++param.consumed;
-                  return std::vector<parse_result>{parse_result(new regex_node_(), rand_regex::empty_node_s())}; // empty
+                  ++param.last_index;
+                  return std::vector<parse_result>{new regex_node_()}; // empty
                 }
               }
               else
@@ -783,35 +818,37 @@ std::vector<parse_result> parser_base(regex_param& param)
             }
             else
             {
-              param.captured_groups.push_back(nullptr);
-              capture_index = param.captured_groups.size() - 1;
+              param.captured_groups.push_back(-1);
+              index = param.captured_groups.size() - 1;
             }
 
-            param.previous_node = nullptr;
             auto nodes = parser_regex(param);
             if(param.regex.size() == param.consumed)
               throw 1; // missing closing bracket
             ++param.consumed;
 
-            if(capture_index != -1)
-              param.captured_groups[capture_index] = std::get<0>(nodes.back());
+            if(index != -1)
+              param.captured_groups[index] = capture_index;
 
             return nodes;
           }}, // TODO, ')'},
         parser{std::make_tuple('['), [range_or_negated_range](regex_param& param){return range_or_negated_range(param);}},
         parser{std::make_tuple('\\'), [parser_escaped](regex_param& param){return parser_escaped(param);}},
         parser{std::make_tuple('.'), [](regex_param& param){
-            return std::vector<parse_result>{parse_result(new random_regex_node_(), rand_regex::random_regex_node_s())};
+            ++param.last_index;
+            return std::vector<parse_result>{new random_regex_node_()};
           }}
       ),
       [](regex_param& param){
           if(param.regex[param.consumed] == '$' && param.regex.size() == param.consumed + 1) // handle end of text symbol (TODO add random text generation if $ is missing at the end - check if OK)
           {
             ++param.consumed;
-            return std::vector<parse_result>{parse_result(new regex_node_(), rand_regex::empty_node_s())};
+            ++param.last_index;
+            return std::vector<parse_result>{new regex_node_()};
           }
 
-          return std::vector<parse_result>{parse_result(new literal_regex_node_(param.regex[param.consumed++]), rand_regex::literal_regex_node_s())};
+          ++param.last_index;
+          return std::vector<parse_result>{new literal_regex_node_(param.regex[param.consumed++])};
         }
     };
 
@@ -829,12 +866,15 @@ regex_template::regex_template(std::string_view regex)
       regex_param param{regex};
       param.consumed = consumed;
       nodes_ = parser_regex(param);
-      std::cout << "\ncount: " << nodes_.size() << '\n';
 
+      std::size_t i = 0;
+
+#ifdef RANDOM_REGEX_DEBUG
       for(auto& node : nodes_)
-        std::cout << std::get<0>(node)->name() << '\n';
+        std::cout << node->name() << "   " << i++ << '\n';
 
       std::cout << '\n';
+#endif
 
       /// TODO in some cases this is also true: regex.size() < consumed (check why???)
       if(param.regex.size() > param.consumed)
@@ -860,7 +900,10 @@ std::visit([&](auto&& n){std::stringstream ss; n.generate(ss, rand); std::cout <
 //    std::cout << "v.index = " << v.index() << '\n';
 //std::cout << "'\n";
 //---------------------------------
+  std::size_t len = 0;
 
-  if(nodes_.size()) // TODO this if could be changed for dummy regex node
-    std::get<0>(nodes_.back())->generate(os, rand);
+  if(len < nodes_.size()) // TODO this if could be changed for dummy regex node
+  {
+    len += nodes_[len]->generate(nodes_, len, os, rand);
+  }
 }

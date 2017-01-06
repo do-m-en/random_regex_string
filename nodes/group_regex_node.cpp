@@ -2,20 +2,31 @@
 
 using rand_regex::group_regex_node_;
 
-group_regex_node_::group_regex_node_(std::vector<regex_node_*>&& grouped_nodes)
-  : grouped_nodes_(grouped_nodes)
+#include <iostream>
+std::size_t group_regex_node_::generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen)
 {
-  //
+#ifdef RANDOM_REGEX_DEBUG
+  std::cout << "G: group_regex_node_ " << current_index << '\n';
+#endif
+
+  std::size_t i = current_index + 1;
+  for(int x = 0; x < end_; ++x)
+  {
+    i += nodes[i]->generate(nodes, i, os, random_gen);
+  }
+
+  return i;
 }
 
-void group_regex_node_::generate(std::ostream& os, random_generator_base& random_gen)
+std::size_t group_regex_node_::regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const
 {
-  for(const auto node : grouped_nodes_)
-    node->generate(os, random_gen);
-}
+#ifdef RANDOM_REGEX_DEBUG
+  std::cout << "R: group_regex_node_ " << current_index << '\n';
+#endif
 
-void group_regex_node_::regenerate(std::ostream& os) const
-{
-  for(const auto node : grouped_nodes_)
-    node->regenerate(os);
+  std::size_t i = current_index + 1;
+  for(int x = 0; x < end_; ++x)
+    i += nodes[i]->regenerate(nodes, i, os);
+
+  return i;
 }

@@ -8,8 +8,8 @@ namespace rand_regex {
 class whitespace_regex_node_ : public regex_node_ // match any whitespace character [\r\n\t\f ]
 {
 public:
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  std::size_t generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) override;
+  std::size_t regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const override;
   std::string name() const override {return "whitespace_regex_node_";}
 
 private:

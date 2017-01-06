@@ -270,6 +270,8 @@ int main()
     test_regex_ECMAScript("gbc.*+abc");
     test_regex_ECMAScript("(abc)*+abc"); // TODO test for *+ (is that even a legal statement?)
     test_regex_ECMAScript("a|f|gbc.*+abc");
+    test_regex_ECMAScript("x|(f|g)a");
+    test_regex_ECMAScript("(f(hi|(jk)))");
     test_regex_ECMAScript("(ab)|(cde)|(fg(hi|(jk)))a");
     test_regex_ECMAScript("(ab)*|(cde)|(fg(hi|(jk)))a");
     test_regex_ECMAScript("ab?c?");
@@ -280,7 +282,7 @@ int main()
     test_regex_ECMAScript("(ab){2}(cd){3,5}e{2,}");
     test_regex_ECMAScript("[0-9A-Z]{5}");
     test_regex_ECMAScript("[abd-x---0-9--]*");
-    test_regex_ECMAScript("[a-c][abd][a-bcd-e0-8][---][--][-a-]");
+    test_regex_ECMAScript("[a-c][xyz][f-hgi-l0-8][---][--][-u-]");
     test_regex_ECMAScript("[0-9]{3}-\\s[0-9]{2}-[0-9]{4}");
     test_regex_ECMAScript("\\^*");
     test_regex_ECMAScript("[\\^]*");
@@ -304,10 +306,6 @@ int main()
     test_regex_ECMAScript("\\k");
     test_regex_ECMAScript("\\`");
     test_regex_ECMAScript(".U");
-    test_regex_ECMAScript("(abc)(def)(ghi)(jkl)(mno)(pqr)(stu)(abc1)(def1)(ghi1)(jkl1)(abc|mno1)\\12");
-    test_regex_ECMAScript("(abc)(def)(ghi)(jkl)(mno)(pqr)(stu)(abc1)(def1)(ghi1(|abc|mno1))(jkl1)\\11"); // TODO empty or is not handled
-    test_regex_ECMAScript("(abc)(def)(?:ghi)(jkl)\\3");
-    test_regex_ECMAScript("(abc)(def)(?:ghi|xyz)(jkl)\\3");
     test_regex_ECMAScript("\\0");
     test_regex_ECMAScript("a\\0b");
     test_regex_ECMAScript("a|");
@@ -323,8 +321,13 @@ int main()
     test_regex_ECMAScript("(?:)");
     test_regex_ECMAScript("(?:abc)");
     test_regex_ECMAScript("(?:abc|def)");
+    test_regex_ECMAScript("(a|b)\\1");
+    test_regex_ECMAScript("(abc)(def)(ghi)(jkl)(mno)(pqr)(stu)(abc1)(def1)(ghi1)(jkl1)(abc|mno1)\\12"); //- FIXME PASSED to this point
+    test_regex_ECMAScript("(abc)(def)(ghi)(jkl)(mno)(pqr)(stu)(abc1)(def1)(ghi1(|abc|mno1))(jkl1)\\11"); // TODO empty or is not handled
+    test_regex_ECMAScript("(abc)(def)(?:ghi)(jkl)\\3");
+    test_regex_ECMAScript("(abc)(def)(?:ghi|xyz)(jkl)\\3");
 //    test_regex_ECMAScript("a\\B"); TODO special exceptions for partial matches - I'll not support those?
-    test_regex_ECMAScript_fuzzer();
+/// TODO uncomment    test_regex_ECMAScript_fuzzer();
     // TODO add negative cases... TODO also check if they realy are invalid
     // []
     // [z-a]

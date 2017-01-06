@@ -9,13 +9,12 @@ namespace rand_regex {
 class repeat_regex_node_ : public regex_node_ // {x}
 {
 public:
-  repeat_regex_node_(regex_node_* node, std::size_t repeat);
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  repeat_regex_node_(std::size_t repeat);
+  std::size_t generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) override;
+  std::size_t regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const override;
   std::string name() const override {return "repeat_regex_node_";}
 
 private:
-  std::unique_ptr<regex_node_> node_;
   std::size_t repeat_;
 };
 

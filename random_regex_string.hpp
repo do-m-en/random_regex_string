@@ -3,7 +3,6 @@
 
 #include <string_view>
 #include <vector>
-#include "data_containers.hpp"
 
 namespace rand_regex {
 
@@ -19,7 +18,7 @@ public:
   void generate(std::ostream& os) const; /// TODO add nothrow edition
 
 private:
-  std::vector<std::tuple<regex_node_*, regex_variant>> nodes_;
+  std::vector<regex_node_*> nodes_;
 };
 
 

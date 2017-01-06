@@ -2,31 +2,20 @@
 
 using rand_regex::or_regex_node_;
 
-or_regex_node_::or_regex_node_(std::vector<regex_node_*>&& nodes)
-  : or_nodes_(std::move(nodes))
+or_regex_node_::or_regex_node_()
 {
-  //
 }
 
-// TODO add bool squash or nodes template flag or helper function that does that in advance (maybe better)...
-or_regex_node_::or_regex_node_(std::initializer_list<regex_node_*> list)
+or_regex_node_::or_regex_node_(const std::vector<std::size_t>& lenghts)
 {
-  // unwrap or nodes
-  for(auto* item : list)
+  for(auto len : lenghts)
   {
-    if(auto or_node = dynamic_cast<or_regex_node_*>(item))
-    {
-      or_nodes_.reserve(or_nodes_.size() + or_node->or_nodes_.size());
-      std::move(std::begin(or_node->or_nodes_), std::end(or_node->or_nodes_), std::back_inserter(or_nodes_));
-    }
-    else
-    {
-      or_nodes_.push_back(item);
-    }
+    jumps_.push_back(end_);
+    end_ += len;
   }
 }
 
-void or_regex_node_::append(regex_node_* item)
+/*void or_regex_node_::append(regex_node_* item)
 {
   if(auto or_node = dynamic_cast<or_regex_node_*>(item))
   {
@@ -37,23 +26,38 @@ void or_regex_node_::append(regex_node_* item)
   {
     or_nodes_.push_back(item);
   }
-}
+}*/
 
-void or_regex_node_::generate(std::ostream& os, random_generator_base& random_gen)
+#include <iostream>
+std::size_t or_regex_node_::generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen)
 {
-  if(or_nodes_.size() == 1)
+#ifdef RANDOM_REGEX_DEBUG
+  std::cout << "G: or_regex_node_ " << current_index << '\n';
+#endif
+
+  if(jumps_.size() == 1)
   {
     random_value_ = 0;
   }
   else
   {
-    random_value_ = random_gen.get_random(0, or_nodes_.size() - 1);
+    random_value_ = random_gen.get_random(0, jumps_.size() - 1);
   }
 
-  or_nodes_[random_value_]->generate(os, random_gen);
+  std::size_t next_index = current_index + jumps_[random_value_];
+  nodes[next_index]->generate(nodes, next_index, os, random_gen);
+
+  return end_;
 }
 
-void or_regex_node_::regenerate(std::ostream& os) const
+std::size_t or_regex_node_::regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const
 {
-  or_nodes_[random_value_]->regenerate(os);
+#ifdef RANDOM_REGEX_DEBUG
+  std::cout << "R: or_regex_node_ " << current_index << '\n';
+#endif
+
+  std::size_t next_index = current_index + jumps_[random_value_];
+  nodes[next_index]->regenerate(nodes, next_index, os);
+
+  return end_;
 }

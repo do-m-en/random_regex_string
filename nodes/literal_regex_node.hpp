@@ -11,9 +11,13 @@ class literal_regex_node_ : public regex_node_ // literal character
 public:
   literal_regex_node_(char literal);
   char getLiteral() const {return literal_;}
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
-  std::string name() const override {return "literal_regex_node_";}
+  std::size_t generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) override;
+  std::size_t regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const override;
+  std::string name() const override {
+      std::string x;
+      x += literal_;
+      return "literal_regex_node_ - " + x;
+    }
 
 private:
   char literal_;

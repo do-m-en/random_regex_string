@@ -5,6 +5,9 @@
 #include <random>
 #include <string>
 
+#include <vector>
+#include <tuple>
+
 namespace rand_regex {
 
 class random_generator_base
@@ -33,8 +36,8 @@ private:
 class regex_node_
 {
 public:
-  virtual void generate(std::ostream& os, random_generator_base& random_gen) {} // default for dummy node
-  virtual void regenerate(std::ostream& os) const {} // default for dummy node
+  virtual std::size_t generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) {return 1;} // default for dummy node
+  virtual std::size_t regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const {return 1;} // default for dummy node
   virtual std::string name() const {return "regex_node_";}
 };
 
