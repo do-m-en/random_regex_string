@@ -18,6 +18,7 @@ public:
       x += literal_;
       return "literal_regex_node_ - " + x;
     }
+  std::size_t get_size(const std::vector<regex_node_*>& nodes, std::size_t current_index) const {return 1;}
 
 private:
   char literal_;

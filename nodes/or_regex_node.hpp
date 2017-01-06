@@ -15,13 +15,14 @@ public:
   std::size_t generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) override;
   std::size_t regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const override;
   std::string name() const override {return "or_regex_node_";}
+  std::size_t get_size(const std::vector<regex_node_*>& nodes, std::size_t current_index) const {return end_;}
 
-  void append(std::size_t len) {jumps_.push_back(end_); end_ += len;}
+  void append(std::size_t len) {++elements_count_; end_ += len;}
 
 private:
-  std::vector<std::size_t> jumps_;
   int random_value_;
 
+  std::size_t elements_count_ = 0;
   std::size_t end_ = 1; // end of or index
 };
 

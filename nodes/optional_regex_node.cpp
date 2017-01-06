@@ -14,7 +14,7 @@ std::size_t optional_regex_node_::generate(const std::vector<regex_node_*>& node
     return nodes[current_index + 1]->generate(nodes, current_index + 1, os, random_gen) + 1;
   }
 
-  return 1; // TODO get node size
+  return nodes[current_index + 1]->get_size(nodes, current_index + 1) + 1;
 }
 
 std::size_t optional_regex_node_::regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const
@@ -28,5 +28,5 @@ std::size_t optional_regex_node_::regenerate(const std::vector<regex_node_*>& no
     return nodes[current_index + 1]->regenerate(nodes, current_index + 1, os) + 1;
   }
 
-  return 1; // TODO get node size
+  return nodes[current_index + 1]->get_size(nodes, current_index + 1) + 1;
 }

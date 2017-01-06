@@ -13,6 +13,7 @@ public:
   std::size_t generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) override;
   std::size_t regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const override;
   std::string name() const override {return "captured_group_reference_node_";}
+  std::size_t get_size(const std::vector<regex_node_*>& nodes, std::size_t current_index) const {return nodes[referred_node_]->get_size(nodes, referred_node_) + 1;}
 
 private:
   std::size_t referred_node_;

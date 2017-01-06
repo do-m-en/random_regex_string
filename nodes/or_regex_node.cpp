@@ -10,7 +10,7 @@ or_regex_node_::or_regex_node_(const std::vector<std::size_t>& lenghts)
 {
   for(auto len : lenghts)
   {
-    jumps_.push_back(end_);
+    ++elements_count_;
     end_ += len;
   }
 }
@@ -35,16 +35,21 @@ std::size_t or_regex_node_::generate(const std::vector<regex_node_*>& nodes, std
   std::cout << "G: or_regex_node_ " << current_index << '\n';
 #endif
 
-  if(jumps_.size() == 1)
+  if(elements_count_ == 1)
   {
     random_value_ = 0;
   }
   else
   {
-    random_value_ = random_gen.get_random(0, jumps_.size() - 1);
+    random_value_ = random_gen.get_random(0, elements_count_ - 1);
   }
 
-  std::size_t next_index = current_index + jumps_[random_value_];
+  std::size_t next_index = current_index + 1;
+  for(std::size_t i = 0; i < random_value_; ++i)
+  {
+    next_index += nodes[next_index]->get_size(nodes, next_index);
+  }
+
   nodes[next_index]->generate(nodes, next_index, os, random_gen);
 
   return end_;
@@ -56,7 +61,12 @@ std::size_t or_regex_node_::regenerate(const std::vector<regex_node_*>& nodes, s
   std::cout << "R: or_regex_node_ " << current_index << '\n';
 #endif
 
-  std::size_t next_index = current_index + jumps_[random_value_];
+  std::size_t next_index = current_index + 1;
+  for(std::size_t i = 0; i < random_value_; ++i)
+  {
+    next_index += nodes[next_index]->get_size(nodes, next_index);
+  }
+
   nodes[next_index]->regenerate(nodes, next_index, os);
 
   return end_;

@@ -39,6 +39,7 @@ public:
   virtual std::size_t generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) {return 1;} // default for dummy node
   virtual std::size_t regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const {return 1;} // default for dummy node
   virtual std::string name() const {return "regex_node_";}
+  virtual std::size_t get_size(const std::vector<regex_node_*>& nodes, std::size_t current_index) const {return 1;}
 };
 
 };
