@@ -15,7 +15,7 @@ std::size_t group_regex_node_::generate(const std::vector<regex_node_*>& nodes, 
     i += nodes[i]->generate(nodes, i, os, random_gen);
   }
 
-  return i;
+  return i - current_index;
 }
 
 std::size_t group_regex_node_::regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const
@@ -28,5 +28,5 @@ std::size_t group_regex_node_::regenerate(const std::vector<regex_node_*>& nodes
   for(int x = 0; x < end_; ++x)
     i += nodes[i]->regenerate(nodes, i, os);
 
-  return i;
+  return i - current_index;
 }
