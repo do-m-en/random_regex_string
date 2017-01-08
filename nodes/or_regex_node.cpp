@@ -1,73 +1,83 @@
 #include "or_regex_node.hpp"
 
-using rand_regex::or_regex_node_;
+#include <type_traits>
 
-or_regex_node_::or_regex_node_()
-{
-}
+#include "captured_group_reference_node.hpp"
+#include "group_regex_node.hpp"
+#include "literal_regex_node.hpp"
+#include "optional_regex_node.hpp"
+#include "random_regex_node.hpp"
+#include "range_random_regex_node.hpp"
+#include "repeat_range_regex_node.hpp"
+#include "repeat_regex_node.hpp"
+#include "whitespace_regex_node.hpp"
 
-or_regex_node_::or_regex_node_(const std::vector<std::size_t>& lenghts)
-{
-  for(auto len : lenghts)
-  {
-    ++elements_count_;
-    end_ += len;
-  }
-}
-
-/*void or_regex_node_::append(regex_node_* item)
-{
-  if(auto or_node = dynamic_cast<or_regex_node_*>(item))
-  {
-    or_nodes_.reserve(or_nodes_.size() + or_node->or_nodes_.size());
-    std::move(std::begin(or_node->or_nodes_), std::end(or_node->or_nodes_), std::back_inserter(or_nodes_));
-  }
-  else
-  {
-    or_nodes_.push_back(item);
-  }
-}*/
+using rand_regex::or_regex_node_g;
 
 #include <iostream>
-std::size_t or_regex_node_::generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen)
+std::size_t or_regex_node_g::generate(std::vector<regex_variant>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen)
 {
 #ifdef RANDOM_REGEX_DEBUG
   std::cout << "G: or_regex_node_ " << current_index << '\n';
 #endif
 
-  if(elements_count_ == 1)
+  if(std::get<or_regex_node_d>(nodes[current_index]).elements_count_ == 1)
   {
-    random_value_ = 0;
+    std::get<or_regex_node_d>(nodes[current_index]).random_value_ = 0;
   }
   else
   {
-    random_value_ = random_gen.get_random(0, elements_count_ - 1);
+    std::get<or_regex_node_d>(nodes[current_index]).random_value_ = random_gen.get_random(0, std::get<or_regex_node_d>(nodes[current_index]).elements_count_ - 1);
   }
 
   std::size_t next_index = current_index + 1;
-  for(std::size_t i = 0; i < random_value_; ++i)
+  for(std::size_t i = 0; i < std::get<or_regex_node_d>(nodes[current_index]).random_value_; ++i)
   {
-    next_index += nodes[next_index]->get_size(nodes, next_index);
+    next_index += std::visit(
+                      [&nodes, &next_index](auto&& node)
+                      {
+                        return std::remove_reference_t<decltype(node)>::generator::get_size(nodes, next_index);
+                      },
+                      nodes[next_index]
+                    );
   }
 
-  nodes[next_index]->generate(nodes, next_index, os, random_gen);
+  std::visit(
+      [&nodes, &next_index, &os, &random_gen](auto&& node)
+      {
+        return std::remove_reference_t<decltype(node)>::generator::generate(nodes, next_index, os, random_gen);
+      },
+      nodes[next_index]
+    );
 
-  return end_;
+  return std::get<or_regex_node_d>(nodes[current_index]).end_;
 }
 
-std::size_t or_regex_node_::regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const
+std::size_t or_regex_node_g::regenerate(const std::vector<regex_variant>& nodes, std::size_t current_index, std::ostream& os)
 {
 #ifdef RANDOM_REGEX_DEBUG
   std::cout << "R: or_regex_node_ " << current_index << '\n';
 #endif
 
   std::size_t next_index = current_index + 1;
-  for(std::size_t i = 0; i < random_value_; ++i)
+  for(std::size_t i = 0; i < std::get<or_regex_node_d>(nodes[current_index]).random_value_; ++i)
   {
-    next_index += nodes[next_index]->get_size(nodes, next_index);
+    next_index += std::visit(
+                      [&nodes, &next_index](auto&& node)
+                      {
+                        return std::remove_reference_t<decltype(node)>::generator::get_size(nodes, next_index);
+                      },
+                      nodes[next_index]
+                    );
   }
 
-  nodes[next_index]->regenerate(nodes, next_index, os);
+  std::visit(
+      [&nodes, &next_index, &os](auto&& node)
+      {
+        return std::remove_reference_t<decltype(node)>::generator::regenerate(nodes, next_index, os);
+      },
+      nodes[next_index]
+    );
 
-  return end_;
+  return std::get<or_regex_node_d>(nodes[current_index]).end_;
 }

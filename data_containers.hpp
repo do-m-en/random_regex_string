@@ -3,100 +3,208 @@
 
 #include <variant>
 
+#include <vector>
+#include <string>
+
 namespace rand_regex {
 
-struct captured_group_reference_node_s
+struct captured_group_reference_node_g;
+struct captured_group_reference_node_d // capturing (stuff) with \number
 {
-  std::size_t node_id_;
+  using generator = captured_group_reference_node_g;
+
+  captured_group_reference_node_d(std::size_t referred_node)
+    : referred_node_(referred_node)
+  {
+    //
+  }
+
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "captured_group_reference_node_";}
+#endif
+
+  std::size_t referred_node_;
 };
 
-struct group_regex_node_s
+struct group_regex_node_g;
+struct group_regex_node_d // (stuff)
 {
-  std::size_t node_id_;
-  std::size_t count_;
+  using generator = group_regex_node_g;
 
-  std::size_t jump_;
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "group_regex_node_";}
+#endif
+
+  void append() {++end_;}
+
+  std::size_t end_ = 0; // end of or index
 };
 
-struct optional_regex_node_s
+struct literal_regex_node_g;
+struct literal_regex_node_d // literal character
 {
-  std::size_t node_id_;
-  int random_value_;
+  using generator = literal_regex_node_g;
 
-  std::size_t jump_;
-};
+  literal_regex_node_d(char literal) : literal_{literal} {}
+  char getLiteral() const {return literal_;}
 
-struct or_regex_node_s
-{
-  std::size_t node_id_;
-  std::size_t count_;
-  int random_value_;
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const
+  {
+    std::string x;
+    x += literal_;
+    return "literal_regex_node_ - " + x;
+  }
+#endif
 
-  std::size_t jump_;
-};
-
-struct repeat_range_regex_node_s
-{
-  std::size_t node_id_;
-  std::size_t min_;
-  std::size_t max_;
-  int random_value_;
-
-  std::size_t jump_;
-};
-
-struct repeat_regex_node_s
-{
-  std::size_t node_id_;
-  std::size_t repeat_;
-
-  std::size_t jump_;
-};
-
-//-----------------------------------
-
-struct literal_regex_node_s
-{
   char literal_;
+};
+
+struct optional_regex_node_g;
+struct optional_regex_node_d // ?
+{
+  using generator = optional_regex_node_g;
+
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "optional_regex_node_";}
+#endif
+
   int random_value_;
 };
 
-struct random_regex_node_s
+struct or_regex_node_g;
+struct or_regex_node_d // |
 {
+  using generator = or_regex_node_g;
+
+  or_regex_node_d() {} // TODO check if we could get rid of this one and require one element at minimum
+  or_regex_node_d(const std::vector<std::size_t>& lenghts)
+  {
+    for(auto len : lenghts)
+    {
+      ++elements_count_;
+      end_ += len;
+    }
+  }
+
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "or_regex_node_";}
+#endif
+
+  void append(std::size_t len) {++elements_count_; end_ += len;}
+
+  int random_value_;
+
+  std::size_t elements_count_ = 0;
+  std::size_t end_ = 1; // end of or index
+};
+
+struct random_regex_node_g;
+struct random_regex_node_d // . TODO check if this could be derived from range_random_regex_node_
+{
+  using generator = random_regex_node_g;
+
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "random_regex_node_";}
+#endif
+
   char generated_value_;
 };
 
-struct range_random_regex_node_s
+struct range_random_regex_node_g;
+struct range_random_regex_node_d // x-y that is used in range_regex_node_
 {
+  using generator = range_random_regex_node_g;
+
+  range_random_regex_node_d(char from, char to)
+    : from_(from)
+    , to_(to)
+  {
+    //
+  }
+
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "range_random_regex_node_";}
+#endif
+
+  char get_from() const {return from_;}
+  char get_to() const {return to_;}
+
   char from_;
   char to_;
   char generated_value_;
 };
 
-struct whitespace_regex_node_s
+struct repeat_range_regex_node_g;
+struct repeat_range_regex_node_d // {x,y}
 {
-  std::vector<char> whitespaces_; // TODO provide whitespaces by reference or a callback (amount, getter)...
+  using generator = repeat_range_regex_node_g;
+
+  repeat_range_regex_node_d(std::size_t min, std::size_t max = 10) // TODO 10 should be a parameter
+    : min_(min)
+    , max_(max)
+  {
+    //
+  }
+
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "repeat_range_regex_node_";}
+#endif
+
+  std::size_t min_;
+  std::size_t max_;
   int random_value_;
 };
 
-//----------------------------------- TODO THROW AWAY
+struct repeat_regex_node_g;
+struct repeat_regex_node_d // {x}
+{
+  using generator = repeat_regex_node_g;
 
-struct empty_node_s{};
+  repeat_regex_node_d(std::size_t repeat)
+    : repeat_(repeat)
+  {
+    //
+  }
 
-//-----------------------------------
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "repeat_regex_node_";}
+#endif
+
+  std::size_t repeat_;
+};
+
+struct whitespace_regex_node_g;
+struct whitespace_regex_node_d // match any whitespace character [\r\n\t\f ]
+{
+  using generator = whitespace_regex_node_g;
+
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "whitespace_regex_node_";}
+#endif
+
+  int random_value_;
+};
+
+struct empty_node_g;
+struct empty_node_d
+{
+  using generator = empty_node_g;
+
+};
 
 using regex_variant = std::variant<
-    empty_node_s, // TODO THROW AWAY
-    captured_group_reference_node_s,
-    group_regex_node_s,
-    optional_regex_node_s,
-    or_regex_node_s,
-    repeat_range_regex_node_s,
-    repeat_regex_node_s,
-    literal_regex_node_s,
-    random_regex_node_s,
-    range_random_regex_node_s,
-    whitespace_regex_node_s
+    empty_node_d, // TODO THROW AWAY
+    captured_group_reference_node_d,
+    group_regex_node_d,
+    optional_regex_node_d,
+    or_regex_node_d,
+    repeat_range_regex_node_d,
+    repeat_regex_node_d,
+    literal_regex_node_d,
+    random_regex_node_d,
+    range_random_regex_node_d,
+    whitespace_regex_node_d
   >;
 
 } // ns rand_regex

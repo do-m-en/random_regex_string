@@ -3,10 +3,11 @@
 
 #include <string_view>
 #include <vector>
+#include <ostream>
+
+#include "data_containers.hpp"
 
 namespace rand_regex {
-
-class regex_node_;
 
 class regex_template
 {
@@ -15,10 +16,10 @@ public:
   ~regex_template();
 //  std::string generate(std::function<std::string(/*TODO*/)> unicode_to_encoding) const;
 
-  void generate(std::ostream& os) const; /// TODO add nothrow edition
+  void generate(std::ostream& os); /// TODO add nothrow edition
 
 private:
-  std::vector<regex_node_*> nodes_;
+  std::vector<regex_variant> nodes_;
 };
 
 

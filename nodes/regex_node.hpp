@@ -1,12 +1,11 @@
 #ifndef REGEX_NODE_INCLUDED
 #define REGEX_NODE_INCLUDED
 
-#include <ostream>
 #include <random>
-#include <string>
 
 #include <vector>
-#include <tuple>
+#include <ostream>
+#include "data_containers.hpp"
 
 namespace rand_regex {
 
@@ -33,13 +32,11 @@ private:
   random_engine engine; 
 };
 
-class regex_node_
+struct empty_node_g
 {
-public:
-  virtual std::size_t generate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) {return 1;} // default for dummy node
-  virtual std::size_t regenerate(const std::vector<regex_node_*>& nodes, std::size_t current_index, std::ostream& os) const {return 1;} // default for dummy node
-  virtual std::string name() const {return "regex_node_";}
-  virtual std::size_t get_size(const std::vector<regex_node_*>& nodes, std::size_t current_index) const {return 1;}
+  static std::size_t generate(std::vector<regex_variant>& nodes, std::size_t current_index, std::ostream& os, random_generator_base& random_gen) {return 1;}
+  static std::size_t regenerate(const std::vector<regex_variant>& nodes, std::size_t current_index, std::ostream& os) {return 1;}
+  static std::size_t get_size(const std::vector<regex_variant>& nodes, std::size_t current_index) {return 1;}
 };
 
 };
