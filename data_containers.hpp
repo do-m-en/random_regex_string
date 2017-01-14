@@ -191,6 +191,9 @@ struct empty_node_d
 {
   using generator = empty_node_g;
 
+#ifdef RANDOM_REGEX_DEBUG
+  std::string name() const {return "empty_node_";}
+#endif
 };
 
 using regex_variant = std::variant<
