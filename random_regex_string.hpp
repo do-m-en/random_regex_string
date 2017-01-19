@@ -19,7 +19,7 @@ public:
   void generate(std::ostream& os) const; /// TODO add nothrow edition
 
 private:
-  std::unique_ptr<regex_node_> root_node_;
+  std::vector<regex_node_*> nodes_;
 };
 
 

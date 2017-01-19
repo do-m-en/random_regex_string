@@ -9,6 +9,7 @@ namespace rand_regex {
 class or_regex_node_ : public regex_node_ // |
 {
 public:
+  or_regex_node_() = default;
   or_regex_node_(std::vector<regex_node_*>&& nodes);
   or_regex_node_(std::initializer_list<regex_node_*> list);
   void append(regex_node_* item);
