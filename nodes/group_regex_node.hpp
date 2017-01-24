@@ -4,20 +4,31 @@
 #include <vector>
 #include "regex_node.hpp"
 
+#ifdef RANDOM_REGEX_DEBUG_NAME
+  #include <string>
+#endif
+
 namespace rand_regex {
 
 class group_regex_node_ : public regex_node_ // (stuff)
 {
 public:
-  group_regex_node_() = default;
-  group_regex_node_(std::vector<regex_node_*>&& grouped_nodes);
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  group_regex_node_(std::size_t start, std::size_t count);
+  void generate(std::vector<regex_node_*>& nodes, std::ostream& os, random_generator_base& random_gen) override;
+  void regenerate(std::vector<regex_node_*>& nodes, std::ostream& os) const override;
 
-  void append(regex_node_ *node) {grouped_nodes_.push_back(node);}
+  void append() {++count_;}
+
+  void increment_index() override {++start_;}
+  void decrement_index() override {--start_;}
+
+#ifdef RANDOM_REGEX_DEBUG_NAME
+  std::string name() const {return "group_regex_node_";}
+#endif
 
 private:
-  std::vector<regex_node_*> grouped_nodes_;
+  std::size_t start_;
+  std::size_t count_;
 };
 
 };

@@ -233,7 +233,7 @@ namespace {
     regex_template generator(regex);
     std::regex rx(regex);
 
-    int max = 1000;
+    int max = 10000;
     std::set<std::string> distinct;
 
     for(int i=0; i<max; ++i)
@@ -279,6 +279,7 @@ int main()
     test_regex_ECMAScript("(ab){2}(cd){3,5}e{2,}");
     test_regex_ECMAScript("[0-9A-Z]{5}");
     test_regex_ECMAScript("[abd-x---0-9--]*");
+    test_regex_ECMAScript("[a-c]");
     test_regex_ECMAScript("[a-c][abd][a-bcd-e0-8][---][--][-a-]");
     test_regex_ECMAScript("[0-9]{3}-\\s[0-9]{2}-[0-9]{4}");
     test_regex_ECMAScript("\\^*");
@@ -323,7 +324,7 @@ int main()
     test_regex_ECMAScript("(?:abc)");
     test_regex_ECMAScript("(?:abc|def)");
 //    test_regex_ECMAScript("a\\B"); TODO special exceptions for partial matches - I'll not support those?
-    test_regex_ECMAScript_fuzzer();
+///    test_regex_ECMAScript_fuzzer();
     // TODO add negative cases... TODO also check if they realy are invalid
     // []
     // [z-a]

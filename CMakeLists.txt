@@ -4,6 +4,9 @@ project(random_regex_string CXX)
 
 add_definitions(-std=c++1z)
 
+#add_definitions(-DRANDOM_REGEX_DEBUG)
+#add_definitions(-DRANDOM_REGEX_DEBUG_NAME)
+
 add_library(${PROJECT_NAME}
   random_regex_string.cpp
 

@@ -1,6 +1,8 @@
 #include "captured_group_reference_node.hpp"
 
-#include <iostream>
+#ifdef RANDOM_REGEX_DEBUG
+  #include <iostream>
+#endif
 
 using rand_regex::captured_group_reference_node_;
 
@@ -10,12 +12,20 @@ captured_group_reference_node_::captured_group_reference_node_(regex_node_* refe
   //
 }
 
-void captured_group_reference_node_::generate(std::ostream& os, random_generator_base& random_gen)
+void captured_group_reference_node_::generate(std::vector<regex_node_*>& nodes, std::ostream& os, random_generator_base& random_gen)
 {
-  referred_node_->regenerate(os);
+#ifdef RANDOM_REGEX_DEBUG
+  std::cout << "G: captured_group_reference_node_\n";
+#endif
+
+  referred_node_->regenerate(nodes, os);
 }
 
-void captured_group_reference_node_::regenerate(std::ostream& os) const
+void captured_group_reference_node_::regenerate(std::vector<regex_node_*>& nodes, std::ostream& os) const
 {
-  referred_node_->regenerate(os);
+#ifdef RANDOM_REGEX_DEBUG
+  std::cout << "R: captured_group_reference_node_\n";
+#endif
+
+  referred_node_->regenerate(nodes, os);
 }
