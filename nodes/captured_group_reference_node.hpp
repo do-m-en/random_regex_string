@@ -6,15 +6,19 @@
 
 namespace rand_regex {
 
-class captured_group_reference_node_ : public regex_node_ // capturing (stuff) with \number
+class inner_group_node_;
+
+class captured_group_reference_node_ // capturing (stuff) with \number
 {
 public:
-  captured_group_reference_node_(regex_node_* referred_node);
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  captured_group_reference_node_() = default;
+  captured_group_reference_node_(int referred_group) : referred_group_{referred_group} {}
+
+  void generate(std::ostream& os, random_generator_base& random_gen, std::vector<std::tuple<int, inner_group_node_*>>& groups);
+  void regenerate(std::ostream& os, const std::vector<std::tuple<int, inner_group_node_*>>& groups) const;
 
 private:
-  regex_node_* referred_node_;
+  int referred_group_;
 };
 
 };

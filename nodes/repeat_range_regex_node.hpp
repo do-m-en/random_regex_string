@@ -1,22 +1,37 @@
 #ifndef REPEAT_RANGE_REGEX_NODE_HPP_INCLUDED
 #define REPEAT_RANGE_REGEX_NODE_HPP_INCLUDED
 
-#include <memory>
+#include <variant>
 #include "regex_node.hpp"
+
+#include "literal_regex_node.hpp"
+#include "inner_group_node.hpp"
+#include "range_or_node.hpp"
+#include "range_random_regex_node.hpp"
+#include "captured_group_reference_node.hpp"
 
 namespace rand_regex {
 
-class repeat_range_regex_node_ : public regex_node_ // {x,y}
+class repeat_range_regex_node_ // {x,y}
 {
 public:
-  repeat_range_regex_node_(regex_node_* node, std::size_t min, std::size_t max = 10); // TODO 10 should be a parameter
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+    using repeat_range_regex_node_variant = std::variant<
+            literal_regex_node_,
+            inner_group_node_,
+            range_or_node_,
+            range_random_regex_node_,
+            captured_group_reference_node_
+          >;
+
+  repeat_range_regex_node_(repeat_range_regex_node_variant&& node, std::tuple<int, int>&& min_max)
+    : node_{std::move(node)}, min_{std::get<0>(min_max)}, max_{std::get<1>(min_max)} {}
+  void generate(std::ostream& os, random_generator_base& random_gen, std::vector<std::tuple<int, inner_group_node_*>>& groups);
+  void regenerate(std::ostream& os, const std::vector<std::tuple<int, inner_group_node_*>>& groups) const;
 
 private:
-  std::unique_ptr<regex_node_> node_;
-  std::size_t min_;
-  std::size_t max_;
+  repeat_range_regex_node_variant node_;
+  int min_;
+  int max_;
   int random_value_;
 };
 

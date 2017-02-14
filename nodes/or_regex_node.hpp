@@ -2,21 +2,22 @@
 #define OR_REGEX_NODE_HPP_INCLUDED
 
 #include <vector>
+
+#include "group_regex_node.hpp"
 #include "regex_node.hpp"
 
 namespace rand_regex {
 
-class or_regex_node_ : public regex_node_ // |
+class or_regex_node_ // |
 {
 public:
-  or_regex_node_(std::vector<regex_node_*>&& nodes);
-  or_regex_node_(std::initializer_list<regex_node_*> list);
-  void append(regex_node_* item);
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  void push_back(group_regex_node_&& item) {nodes_.push_back(std::move(item));}
+
+  void generate(std::ostream& os, random_generator_base& random_gen, std::vector<std::tuple<int, inner_group_node_*>>& groups);
+  void regenerate(std::ostream& os, const std::vector<std::tuple<int, inner_group_node_*>>& groups) const;
 
 private:
-  std::vector<regex_node_*> or_nodes_; // TODO should be a unique ptr...
+  std::vector<group_regex_node_> nodes_;
   int random_value_;
 };
 

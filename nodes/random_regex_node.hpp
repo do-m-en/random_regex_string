@@ -5,11 +5,11 @@
 
 namespace rand_regex {
 
-class random_regex_node_ : public regex_node_ // . TODO check if this could be derived from range_random_regex_node_
+class random_regex_node_ // . TODO check if this could be derived from range_random_regex_node_
 {
 public:
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  void generate(std::ostream& os, random_generator_base& random_gen);
+  void regenerate(std::ostream& os) const;
 
 private:
   char generated_value_;

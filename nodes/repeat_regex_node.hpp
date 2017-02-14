@@ -4,18 +4,20 @@
 #include <memory>
 #include "regex_node.hpp"
 
+#include "group_regex_node.hpp"
+
 namespace rand_regex {
 
 class repeat_regex_node_ : public regex_node_ // {x}
 {
 public:
-  repeat_regex_node_(regex_node_* node, std::size_t repeat);
+  repeat_regex_node_(group_regex_node_&& node, int repeat) : node_{std::move(node)}, repeat_{repeat} {}
   void generate(std::ostream& os, random_generator_base& random_gen) override;
   void regenerate(std::ostream& os) const override;
 
 private:
-  std::unique_ptr<regex_node_> node_;
-  std::size_t repeat_;
+  group_regex_node_ node_;
+  int repeat_;
 };
 
 };

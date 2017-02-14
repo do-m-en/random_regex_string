@@ -4,28 +4,32 @@
 
 using rand_regex::repeat_range_regex_node_;
 
-repeat_range_regex_node_::repeat_range_regex_node_(regex_node_* node, std::size_t min, std::size_t max)
-  : node_(node)
-  , min_(min)
-  , max_(max)
+void repeat_range_regex_node_::generate(std::ostream& os, random_generator_base& random_gen, std::vector<std::tuple<int, inner_group_node_*>>& groups)
 {
-  //
-}
-
-void repeat_range_regex_node_::generate(std::ostream& os, random_generator_base& random_gen)
-{
-  random_value_ = random_gen.get_random(min_, max_);
+  random_value_ = (min_ == max_ ? min_ : random_gen.get_random(min_, max_));
 
   for(int i = 0; i < random_value_; ++i)
   {
-    node_->generate(os, random_gen);
+    std::visit(
+      [&os, &random_gen, &groups](auto&& node)
+      {
+        return node.generate(os, random_gen, groups);
+      },
+      node_
+    );
   }
 }
 
-void repeat_range_regex_node_::regenerate(std::ostream& os) const
+void repeat_range_regex_node_::regenerate(std::ostream& os, const std::vector<std::tuple<int, inner_group_node_*>>& groups) const
 {
   for(int i = 0; i < random_value_; ++i)
   {
-    node_->regenerate(os);
+    std::visit(
+      [&os, &groups](auto&& node)
+      {
+        return node.regenerate(os, groups);
+      },
+      node_
+    );
   }
 }
