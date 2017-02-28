@@ -9,12 +9,15 @@
 #include <sstream>
 #include <functional>
 
+#include <iostream> // FIXME delete
+
 #include "captured_group_reference_node.hpp"
 #include "group_regex_node.hpp"
 #include "literal_regex_node.hpp"
+#include "dependency_regex_node.hpp"
+#include "dependency_optional_regex_node.hpp"
 #include "optional_regex_node.hpp"
 #include "or_regex_node.hpp"
-#include "random_regex_node.hpp"
 #include "range_random_regex_node.hpp"
 #include "repeat_range_regex_node.hpp"
 #include "repeat_regex_node.hpp"
@@ -23,10 +26,11 @@
 using rand_regex::captured_group_reference_node_;
 using rand_regex::group_regex_node_;
 using rand_regex::literal_regex_node_;
+using rand_regex::dependency_regex_node_;
+using rand_regex::dependency_optional_regex_node_;
 using rand_regex::optional_regex_node_;
 using rand_regex::or_regex_node_;
 using rand_regex::range_random_regex_node_;
-using rand_regex::random_regex_node_;
 using rand_regex::regex_node_;
 using rand_regex::repeat_range_regex_node_;
 using rand_regex::repeat_regex_node_;
@@ -34,31 +38,6 @@ using rand_regex::whitespace_regex_node_;
 
 constexpr char ascii_min = 0;
 constexpr char ascii_max = 127;
-
-
-// Scott Schurr's str_const (constexpr string)
-// see: https://github.com/boostcon/cppnow_presentations_2012/blob/master/wed/schurr_cpp11_tools_for_class_authors.pdf?raw=true
-/*class str_const
-{
-public:
-  template<std::size_t N>
-  constexpr str_const(const char(&a)[N])
-    : p_(a)
-    , sz_(N-1)
-  {
-    //
-  }
-
-  constexpr char operator[](std::size_t n)
-  {
-    return n < sz_ ? p_[n] : throw std::out_of_range("");
-  }
-
-  constexpr std::size_t size() { return sz_; }
-private:
-  const char* const p_;
-  const std::size_t sz_;
-};*/
 
 struct regex_param
 {
@@ -195,7 +174,7 @@ public:
 
     for(auto& p : or_parsers_)
     {
-      //if(auto node = p(regex, consumed); node) - gcc is missing P0305R1 support...
+      //if(auto node = p(param); node) - gcc is missing P0305R1 support...
       auto node = p(param);
       if(node)
         return node;
@@ -250,6 +229,27 @@ regex_node_* parser_term(regex_param& param)
   return node;
 }
 
+
+namespace {
+
+  auto digit_parser = [](regex_param& param){
+      std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed); // TODO find in range 0-9 would be nice...
+
+      if(end == std::experimental::string_view::npos || end == param.consumed)
+        throw 1; // TODO exception
+
+      int digit = std::stoi(param.regex.substr(param.consumed, end).to_string());
+
+      if(digit < 0)
+        throw 1; // TODO exception
+
+      param.consumed = end;
+
+      return digit;
+    };
+
+} // ns
+
 // <factor> ::= <base> { '*' } | <base> { '+' } | <base> { '?' } | <base> { '{}' }
 regex_node_* parser_factor(regex_param& param)
 {
@@ -291,22 +291,6 @@ regex_node_* parser_factor(regex_param& param)
   repeat_range_one(param);
   optional_item(param);
 
-  auto digit_parser = [](regex_param& param){
-        std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed); // TODO find in range 0-9 would be nice...
-
-        if(end == std::experimental::string_view::npos || end == param.consumed)
-          throw 1; // TODO exception
-
-        int digit = std::stoi(param.regex.substr(param.consumed, end).to_string());
-
-        if(digit < 0)
-          throw 1; // TODO exception
-
-        param.consumed = end;
-
-        return digit;
-      };
-
   if(param.consumed < param.regex.size() && param.regex[param.consumed] == '{')
   {
     ++param.consumed; // consume {
@@ -317,7 +301,7 @@ regex_node_* parser_factor(regex_param& param)
         num = digit_parser(param);
       else
         /// TODO handle exception
-        throw 1; // syntax x{,y} is not supported
+        throw 1; // syntax x{,y} is not supported in C++ (works as literal in online regex tester)
     }
     else
       throw 1; // TODO exception - unexpected end of regex
@@ -379,7 +363,8 @@ regex_node_* parser_base(regex_param& param)
         }};
   auto any_alphanum_or_underscore = parser{'w', [](regex_param& param) // any alphanumeric characters or _
         {
-          return new or_regex_node_{new range_random_regex_node_{'a', 'z'},
+          return new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                    new range_random_regex_node_{'a', 'z'},
                                     new range_random_regex_node_{'0', '9'},
                                     new literal_regex_node_{'_'}};
         }};
@@ -410,7 +395,7 @@ regex_node_* parser_base(regex_param& param)
           if(param.consumed - 2 == 0) // case when \b doesn't have a value before it - not valid
             throw 1;
 
-          if(!::isspace(param.regex[param.consumed - 3]) && !::isspace(param.regex[param.consumed + 1]))
+          if(!::isspace(param.regex[param.consumed - 3]) && !::isspace(param.regex[param.consumed]))
             throw 1;
 
           return new regex_node_(); // TODO remove dummy node as it is useles
@@ -694,7 +679,523 @@ regex_node_* parser_base(regex_param& param)
           }}, // TODO, ')'},
         {'[', [range_or_negated_range](regex_param& param){return range_or_negated_range(param);}},
         {'\\', [parser_escaped](regex_param& param){return parser_escaped(param);}},
-        {'.', [](regex_param& param){return new random_regex_node_();}}
+        {'.', [](regex_param& param)
+          {
+                // we have to make a lookahead because dot has to be treated differently in case of \b (^\w|\w$|\W\w|\w\W)
+                if(param.regex[param.consumed] == '*')
+                {
+                  if(param.regex[param.consumed + 1] == '\\' && param.regex[param.consumed + 2] == 'b')
+                  {
+                    param.consumed += 3;
+
+                    //TODO handle: if previously generated char is valid in place of the one . will generate we might as well skip the generation
+                    //TODO handle: only last generated item must match the expected \b requirement
+                    if(param.regex[param.consumed] == '.')
+                    {
+                      if(param.regex[param.consumed + 1] == '*')
+                      {
+                      }
+                      else if(param.regex[param.consumed + 1] == '+')
+                      {
+                      }
+                      else if(param.regex[param.consumed + 1] == '?')
+                      {
+                      }
+                      else if(param.regex[param.consumed + 1] == '{')
+                      {
+                      }
+                      else
+                      {
+                      }
+                    }
+                    else if((param.regex[param.consumed] >= 'A' && param.regex[param.consumed] <= 'Z') ||
+                       (param.regex[param.consumed] >= 'a' && param.regex[param.consumed] <= 'z') ||
+                       (param.regex[param.consumed] >= '0' && param.regex[param.consumed] <= '9') ||
+                       param.regex[param.consumed] == '_')
+                    {
+                      // any \W except new line or carriage return as dot is not allowed to generate those
+                      return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                new repeat_range_regex_node_{
+                                  // FIXME duplication of dot...
+                                  new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                     new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                     new range_random_regex_node_{14, ascii_max}}, 0}, // TODO this repeat 0 is case that can produce issues in combination with capture groups...
+                                new dependency_optional_regex_node_{false,
+                                  new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                     new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                     new range_random_regex_node_{14, '0' - 1},
+                                                     new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                     new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                     new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                     new range_random_regex_node_{'z' + 1, ascii_max}}}}});
+                    }
+                    else
+                    {
+                      // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                      return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                new repeat_range_regex_node_{
+                                  // FIXME duplication of dot...
+                                  new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                     new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                     new range_random_regex_node_{14, ascii_max}}, 0}, // TODO this repeat 0 is case that can produce issues in combination with capture groups...
+                                new dependency_optional_regex_node_{true,
+                                  //TODO return any_alphanum_or_underscore() duplicates this part...
+                                  new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                     new range_random_regex_node_{'a', 'z'},
+                                                     new range_random_regex_node_{'0', '9'},
+                                                     new literal_regex_node_{'_'}}}}});
+                    }
+                  }
+                  // else - no need to bother about it as we're only trying to handle \b
+                }
+                else if(param.regex[param.consumed] == '+')
+                {
+                  if(param.regex[param.consumed + 1] == '\\' && param.regex[param.consumed + 2] == 'b')
+                  {
+                    param.consumed += 3;
+
+                    if(param.regex[param.consumed] == '.')
+                    {
+                      if(param.regex[param.consumed + 1] == '*')
+                      {
+                      }
+                      else if(param.regex[param.consumed + 1] == '+')
+                      {
+                      }
+                      else if(param.regex[param.consumed + 1] == '?')
+                      {
+                      }
+                      else if(param.regex[param.consumed + 1] == '{')
+                      {
+                      }
+                      else
+                      {
+                      }
+                    }
+                    else if((param.regex[param.consumed] >= 'A' && param.regex[param.consumed] <= 'Z') ||
+                       (param.regex[param.consumed] >= 'a' && param.regex[param.consumed] <= 'z') ||
+                       (param.regex[param.consumed] >= '0' && param.regex[param.consumed] <= '9') ||
+                       param.regex[param.consumed] == '_')
+                    {
+                      // any \W except new line or carriage return as dot is not allowed to generate those
+                      return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                new repeat_range_regex_node_{
+                                  // FIXME duplication of dot...
+                                  new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                     new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                     new range_random_regex_node_{14, ascii_max}}, 1},
+                                new dependency_optional_regex_node_{false,
+                                  new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                     new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                     new range_random_regex_node_{14, '0' - 1},
+                                                     new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                     new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                     new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                     new range_random_regex_node_{'z' + 1, ascii_max}}}}});
+                    }
+                    else
+                    {
+                      // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                      return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                new repeat_range_regex_node_{
+                                  // FIXME duplication of dot...
+                                  new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                     new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                     new range_random_regex_node_{14, ascii_max}}, 1},
+                                new dependency_optional_regex_node_{true,
+                                  //TODO return any_alphanum_or_underscore() duplicates this part...
+                                  new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                     new range_random_regex_node_{'a', 'z'},
+                                                     new range_random_regex_node_{'0', '9'},
+                                                     new literal_regex_node_{'_'}}}}});
+                    }
+                  }
+                  else
+                  {
+                    return static_cast<regex_node_*>(new repeat_range_regex_node_{
+                                // FIXME duplication of dot...
+                                new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                   new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                   new range_random_regex_node_{14, ascii_max}}, 1});
+                  }
+                }
+                else if(param.regex[param.consumed] == '?')
+                {
+                  ++param.consumed;
+                  if(param.regex[param.consumed] == '?')
+                    ++param.consumed; // skip one more as two consecutive question marks are allowed
+
+                  if(param.regex[param.consumed] == '\\' && param.regex[param.consumed + 1] == 'b')
+                  {
+                    param.consumed += 2;
+                    if(param.regex[param.consumed] == '.')
+                    {
+                    }
+                    else if((param.regex[param.consumed] >= 'A' && param.regex[param.consumed] <= 'Z') ||
+                       (param.regex[param.consumed] >= 'a' && param.regex[param.consumed] <= 'z') ||
+                       (param.regex[param.consumed] >= '0' && param.regex[param.consumed] <= '9') ||
+                       param.regex[param.consumed] == '_')
+                    {
+                      // any \W except new line or carriage return as dot is not allowed to generate those
+                      return static_cast<regex_node_*>( // FIXME how to combine optional and dependency optional node?
+                                new dependency_optional_regex_node_{false, // TODO this won't work in all cases in combination with capture groups
+                                  new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                     new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                     new range_random_regex_node_{14, '0' - 1},
+                                                     new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                     new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                     new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                     new range_random_regex_node_{'z' + 1, ascii_max}}});
+                    }
+                    else
+                    {
+                      // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                      return static_cast<regex_node_*>( // FIXME how to combine optional and dependency optional node?
+                                new dependency_optional_regex_node_{true, // TODO this won't work in all cases in combination with capture groups
+                                  //TODO return any_alphanum_or_underscore() duplicates this part...
+                                  new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                     new range_random_regex_node_{'a', 'z'},
+                                                     new range_random_regex_node_{'0', '9'},
+                                                     new literal_regex_node_{'_'}}});
+                    }
+                  }
+                  else
+                  {
+                    return static_cast<regex_node_*>(new optional_regex_node_{
+                                 // TODO duplicate of dot below
+                                 new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                    new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                    new range_random_regex_node_{14, ascii_max}}
+                                                     });
+                  }
+                }
+                else if(param.regex[param.consumed] == '{')
+                {
+                  ++param.consumed;
+
+                  std::size_t num = 0;
+                  if(param.consumed < param.regex.size())
+                  {
+                    if(param.regex[param.consumed] != ',')
+                      num = digit_parser(param);
+                    else
+                      /// TODO handle exception
+                      throw 1; // syntax x{,y} is not supported in C++ (works as literal in online regex tester)
+                  }
+                  else
+                    throw 1; // TODO exception - unexpected end of regex
+
+                  if(param.consumed < param.regex.size() && param.regex[param.consumed] == ',')
+                  {
+                    if(param.regex.size() > ++param.consumed)
+                    {
+                      if(param.regex[param.consumed] == '}')
+                      {
+                        ++param.consumed; // consume }
+
+                        if(param.regex[param.consumed] == '\\' && param.regex[param.consumed + 1] == 'b')
+                        {
+                          param.consumed += 2;
+                          if(param.regex[param.consumed] == '.')
+                          {
+                          }
+                          else if((param.regex[param.consumed] >= 'A' && param.regex[param.consumed] <= 'Z') ||
+                             (param.regex[param.consumed] >= 'a' && param.regex[param.consumed] <= 'z') ||
+                             (param.regex[param.consumed] >= '0' && param.regex[param.consumed] <= '9') ||
+                             param.regex[param.consumed] == '_')
+                          {
+                            return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                                            new repeat_range_regex_node_{
+                                                              // FIXME duplication of dot...
+                                                              new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                                 new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                                 new range_random_regex_node_{14, ascii_max}}, num - 1},
+                                                            new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                               new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                               new range_random_regex_node_{14, '0' - 1},
+                                                                               new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                                               new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                                               new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                                               new range_random_regex_node_{'z' + 1, ascii_max}}}});
+                          }
+                          else
+                          {
+                            // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                            return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                        new repeat_range_regex_node_{
+                                          // FIXME duplication of dot...
+                                          new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                             new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                             new range_random_regex_node_{14, ascii_max}}, num},
+                                        //TODO return any_alphanum_or_underscore() duplicates this part...
+                                        new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                           new range_random_regex_node_{'a', 'z'},
+                                                           new range_random_regex_node_{'0', '9'},
+                                                           new literal_regex_node_{'_'}}}});
+                          }
+                        }
+                        else
+                        {
+                          return static_cast<regex_node_*>(new repeat_range_regex_node_{
+                                // TODO duplicate of dot below
+                                new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                   new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                   new range_random_regex_node_{14, ascii_max}}, num});
+                        }
+                      }
+                      else
+                      {
+                        std::size_t num_2 = digit_parser(param);
+                        ++param.consumed; // consume }
+
+                        if(param.regex[param.consumed] == '\\' && param.regex[param.consumed + 1] == 'b')
+                        {
+                          param.consumed += 2;
+                          if(param.regex[param.consumed] == '.')
+                          {
+                          }
+                          else if((param.regex[param.consumed] >= 'A' && param.regex[param.consumed] <= 'Z') ||
+                             (param.regex[param.consumed] >= 'a' && param.regex[param.consumed] <= 'z') ||
+                             (param.regex[param.consumed] >= '0' && param.regex[param.consumed] <= '9') ||
+                             param.regex[param.consumed] == '_')
+                          {
+                            if(num == num_2)
+                            {
+                              if(num == 0)
+                                throw 1; // ignored token... but valid... // TODO better exception
+                              else if(num == 1)
+                              {
+                                return static_cast<regex_node_*>(new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                                   new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                                   new range_random_regex_node_{14, '0' - 1},
+                                                                                   new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                                                   new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                                                   new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                                                   new range_random_regex_node_{'z' + 1, ascii_max}});
+                              }
+                              else
+                              {
+                                // TODO duplicated below as it is same as {x}
+                                return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                                                new repeat_regex_node_{
+                                                                  // FIXME duplication of dot...
+                                                                  new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                                     new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                                     new range_random_regex_node_{14, ascii_max}}, num - 1},
+                                                                new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                                   new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                                   new range_random_regex_node_{14, '0' - 1},
+                                                                                   new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                                                   new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                                                   new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                                                   new range_random_regex_node_{'z' + 1, ascii_max}}}});
+                              }
+                            }
+                            else
+                            {
+                              return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                                              new repeat_range_regex_node_{
+                                                                // FIXME duplication of dot...
+                                                                new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                                   new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                                   new range_random_regex_node_{14, ascii_max}}, num, num_2 - 1},
+                                                              new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                                 new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                                 new range_random_regex_node_{14, '0' - 1},
+                                                                                 new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                                                 new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                                                 new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                                                 new range_random_regex_node_{'z' + 1, ascii_max}}}});
+                            }
+                          }
+                          else
+                          {
+                            if(num == num_2)
+                            {
+                              if(num == 0)
+                                throw 1; // ignored token... but valid... // TODO better exception
+                              else if(num == 1)
+                              {
+                                // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                                return static_cast<regex_node_*>(
+                                            //TODO return any_alphanum_or_underscore() duplicates this part...
+                                            new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                               new range_random_regex_node_{'a', 'z'},
+                                                               new range_random_regex_node_{'0', '9'},
+                                                               new literal_regex_node_{'_'}});
+                              }
+                              else
+                              {
+                                // TODO duplicated below as it is same as {x}
+                                // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                                return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                            new repeat_regex_node_{
+                                              // FIXME duplication of dot...
+                                              new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                 new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                 new range_random_regex_node_{14, ascii_max}}, num-1},
+                                            //TODO return any_alphanum_or_underscore() duplicates this part...
+                                            new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                               new range_random_regex_node_{'a', 'z'},
+                                                               new range_random_regex_node_{'0', '9'},
+                                                               new literal_regex_node_{'_'}}}});
+                              }
+                            }
+                            else
+                            {
+                              // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                              return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                          new repeat_range_regex_node_{
+                                            // FIXME duplication of dot...
+                                            new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                               new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                               new range_random_regex_node_{14, ascii_max}}, num, num_2 - 1},
+                                          //TODO return any_alphanum_or_underscore() duplicates this part...
+                                          new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                             new range_random_regex_node_{'a', 'z'},
+                                                             new range_random_regex_node_{'0', '9'},
+                                                             new literal_regex_node_{'_'}}}});
+                            }
+                          }
+                        }
+                        else
+                        {
+                          return static_cast<regex_node_*>(new repeat_range_regex_node_{
+                              // TODO duplicate of dot below
+                              new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                 new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                 new range_random_regex_node_{14, ascii_max}}, num, num_2});
+                        }
+                      }
+                    }
+                    else
+                      /// TODO error handling
+                      throw 1;
+                  }
+                  else if(param.regex.size() > param.consumed && param.regex[param.consumed] == '}')
+                  {
+                    ++param.consumed; // consume }
+                    if(param.regex[param.consumed] == '\\' && param.regex[param.consumed + 1] == 'b')
+                    {
+                      param.consumed += 2;
+                      if(param.regex[param.consumed] == '.')
+                      {
+                      }
+                      else if((param.regex[param.consumed] >= 'A' && param.regex[param.consumed] <= 'Z') ||
+                         (param.regex[param.consumed] >= 'a' && param.regex[param.consumed] <= 'z') ||
+                         (param.regex[param.consumed] >= '0' && param.regex[param.consumed] <= '9') ||
+                         param.regex[param.consumed] == '_')
+                      {
+                        if(num == 0)
+                          throw 1; // ignored token... but valid... // TODO better exception
+                        else if(num == 1)
+                        {
+                          return static_cast<regex_node_*>(
+                                                          new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                             new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                             new range_random_regex_node_{14, '0' - 1},
+                                                                             new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                                             new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                                             new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                                             new range_random_regex_node_{'z' + 1, ascii_max}});
+                        }
+                        else
+                        {
+                          return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                                          new repeat_regex_node_{
+                                                            // FIXME duplication of dot...
+                                                            new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                               new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                               new range_random_regex_node_{14, ascii_max}}, num - 1},
+                                                          new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                             new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                             new range_random_regex_node_{14, '0' - 1},
+                                                                             new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                                                             new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                                                             new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                                                             new range_random_regex_node_{'z' + 1, ascii_max}}}});
+                        }
+                      }
+                      else
+                      {
+                        if(num == 0)
+                          throw 1; // ignored token... but valid... // TODO better exception
+                        else if(num == 1)
+                        {
+                          // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                          return static_cast<regex_node_*>(
+                                      //TODO return any_alphanum_or_underscore() duplicates this part...
+                                      new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                         new range_random_regex_node_{'a', 'z'},
+                                                         new range_random_regex_node_{'0', '9'},
+                                                         new literal_regex_node_{'_'}});
+                        }
+                        else
+                        {
+                          // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                          return static_cast<regex_node_*>(new group_regex_node_{std::vector<regex_node_*>{
+                                      new repeat_regex_node_{
+                                        // FIXME duplication of dot...
+                                        new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                           new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                           new range_random_regex_node_{14, ascii_max}}, num-1},
+                                      //TODO return any_alphanum_or_underscore() duplicates this part...
+                                      new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                                         new range_random_regex_node_{'a', 'z'},
+                                                         new range_random_regex_node_{'0', '9'},
+                                                         new literal_regex_node_{'_'}}}});
+                        }
+                      }
+                    }
+                    else
+                    {
+                      return static_cast<regex_node_*>(new repeat_regex_node_{
+                          // TODO duplicate of dot below
+                          new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                             new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                             new range_random_regex_node_{14, ascii_max}}, num});
+                    }
+                  }
+                  else
+                    /// TODO error handling
+                    throw 1;
+                }
+                else if(param.regex[param.consumed] == '\\' && param.regex[param.consumed + 1] == 'b')
+                {
+                  param.consumed += 2;
+
+                  if(param.regex[param.consumed] == '.')
+                  {
+                  }
+                  else if((param.regex[param.consumed] >= 'A' && param.regex[param.consumed] <= 'Z') ||
+                     (param.regex[param.consumed] >= 'a' && param.regex[param.consumed] <= 'z') ||
+                     (param.regex[param.consumed] >= '0' && param.regex[param.consumed] <= '9') ||
+                     param.regex[param.consumed] == '_')
+                  {
+                    // any \W except new line or carriage return as dot is not allowed to generate those
+                    return static_cast<regex_node_*>(new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                              new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                              new range_random_regex_node_{14, '0' - 1},
+                                              new range_random_regex_node_{'9' + 1, 'A' - 1},
+                                              new range_random_regex_node_{'Z' + 1, '_' - 1},
+                                              new range_random_regex_node_{'_' + 1, 'a' - 1},
+                                              new range_random_regex_node_{'z' + 1, ascii_max}});
+                  }
+                  else
+                  {
+                    // \W is already covered afeter \b so dot must not generate an extra one (handling \w part)
+                    //TODO return any_alphanum_or_underscore() duplicates this part...
+                    return static_cast<regex_node_*>(new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                              new range_random_regex_node_{'a', 'z'},
+                                              new range_random_regex_node_{'0', '9'},
+                                              new literal_regex_node_{'_'}});
+                  }
+                }
+
+                return static_cast<regex_node_*>(new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                          new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                          new range_random_regex_node_{14, ascii_max}});
+          }}
       },
       [](regex_param& param){
           if(param.regex[param.consumed] == '$' && param.regex.size() == param.consumed + 1) // handle end of text symbol (TODO add random text generation if $ is missing at the end - check if OK)
@@ -733,7 +1234,8 @@ regex_template::regex_template(std::experimental::string_view regex)
 void regex_template::generate(std::ostream& os) const
 {
   random_generator<> rand; // TODO should be provided from the outside
+  char last_gen = '\0';
 
   if(root_node_.get()) // TODO this if could be changed for dummy regex node
-    root_node_->generate(os, rand);
+    root_node_->generate(os, rand, last_gen);
 }

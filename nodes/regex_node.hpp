@@ -32,8 +32,8 @@ private:
 class regex_node_
 {
 public:
-  virtual void generate(std::ostream& os, random_generator_base& random_gen) {} // default for dummy node
-  virtual void regenerate(std::ostream& os) const {} // default for dummy node
+  virtual void generate(std::ostream& os, random_generator_base& random_gen, char& last_gen) {} // default for dummy node
+  virtual void regenerate(std::ostream& os, char& last_gen) const {} // default for dummy node
 };
 
 };

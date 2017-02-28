@@ -11,6 +11,8 @@ add_library(${PROJECT_NAME}
   ./nodes/group_regex_node.cpp
   ./nodes/literal_regex_node.cpp
   ./nodes/optional_regex_node.cpp
+  ./nodes/dependency_regex_node.cpp
+  ./nodes/dependency_optional_regex_node.cpp
   ./nodes/or_regex_node.cpp
   ./nodes/random_regex_node.cpp
   ./nodes/range_random_regex_node.cpp

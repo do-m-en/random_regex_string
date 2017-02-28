@@ -10,8 +10,8 @@ class repeat_regex_node_ : public regex_node_ // {x}
 {
 public:
   repeat_regex_node_(regex_node_* node, std::size_t repeat);
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  void generate(std::ostream& os, random_generator_base& random_gen, char& last_gen) override;
+  void regenerate(std::ostream& os, char& last_gen) const override;
 
 private:
   std::unique_ptr<regex_node_> node_;

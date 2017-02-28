@@ -12,8 +12,8 @@ public:
   or_regex_node_(std::vector<regex_node_*>&& nodes);
   or_regex_node_(std::initializer_list<regex_node_*> list);
   void append(regex_node_* item);
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  void generate(std::ostream& os, random_generator_base& random_gen, char& last_gen) override;
+  void regenerate(std::ostream& os, char& last_gen) const override;
 
 private:
   std::vector<regex_node_*> or_nodes_; // TODO should be a unique ptr...
