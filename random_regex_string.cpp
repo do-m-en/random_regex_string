@@ -291,7 +291,7 @@ regex_node_* parser_factor(regex_param& param)
         throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // syntax x{,y} is not supported in C++ (works as literal in online regex tester)
     }
     else
-      throw 1; // TODO exception - unexpected end of regex
+      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // exception - unexpected end of regex
 
     if(param.consumed < param.regex.size() && param.regex[param.consumed] == ',')
     {
