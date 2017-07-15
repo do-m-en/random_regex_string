@@ -573,7 +573,7 @@ regex_node_* parser_base(regex_param& param)
                   }
                   else if(cur.first == ascii_min && next.second == ascii_max)
                     // in rare case where no characters are allowed throw an exception as regex is faulty...
-                    throw 1; // TODO exception
+                    throw std::runtime_error("Regex error at " + std::to_string(param.consumed));
                   else if(cur.first == ascii_min)
                     invert.push_back(new range_random_regex_node_(next.second + 1, ascii_max));
                   else
