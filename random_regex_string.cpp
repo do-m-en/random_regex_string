@@ -8,6 +8,7 @@
 #include <random>
 #include <sstream>
 #include <functional>
+#include <stdexcept>
 
 #include "captured_group_reference_node.hpp"
 #include "group_regex_node.hpp"
@@ -34,31 +35,6 @@ using rand_regex::whitespace_regex_node_;
 
 constexpr char ascii_min = 0;
 constexpr char ascii_max = 127;
-
-
-// Scott Schurr's str_const (constexpr string)
-// see: https://github.com/boostcon/cppnow_presentations_2012/blob/master/wed/schurr_cpp11_tools_for_class_authors.pdf?raw=true
-/*class str_const
-{
-public:
-  template<std::size_t N>
-  constexpr str_const(const char(&a)[N])
-    : p_(a)
-    , sz_(N-1)
-  {
-    //
-  }
-
-  constexpr char operator[](std::size_t n)
-  {
-    return n < sz_ ? p_[n] : throw std::out_of_range("");
-  }
-
-  constexpr std::size_t size() { return sz_; }
-private:
-  const char* const p_;
-  const std::size_t sz_;
-};*/
 
 struct regex_param
 {
@@ -93,7 +69,6 @@ public:
 
   // TODO add size checked and unchecked version as other parser types can handle check at the top level for all (or/and parsers)
   //      for now failing size checks forces or/and parsers to continue untill all parsers are used up
-//  template<bool truncate=true>
   regex_node_* operator()(regex_param& param) const
   {
     regex_node_* node = nullptr;
@@ -107,9 +82,10 @@ public:
           ++param.consumed;
           node = consumer_(param);
 
-          if(!node) {
+          if(!node)
+          {
             --param.consumed;
-            throw 1; // TODO throw if start token was found but consumption did not take place
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed));
           }
 
           break;
@@ -158,19 +134,18 @@ public:
           nodes.push_back(else_parser_(param)); // TODO check if null is returned...
         else
         {
-          //throw 1; // TODO throw no match found exception
           for(auto node : nodes)
             delete node;
 
           nodes.clear();
 
-          throw 1;
+          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // no match found
         }
       }
     }
 
     if(param.regex.size() == param.consumed && param.regex[param.consumed-1] != terminator_)
-      throw 1; // handle case when terminator is not reached
+      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // terminator not found
 
     return nodes;
   }
@@ -191,7 +166,7 @@ public:
   regex_node_* operator()(regex_param& param) const
   {
     if(param.regex.size() == param.consumed)
-      throw 1; // error should contain one more character
+      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // should contain one more character
 
     for(auto& p : or_parsers_)
     {
@@ -204,7 +179,7 @@ public:
     if(else_parser_)
       return else_parser_(param);
 
-    throw 1; // TODO throw no match found exception
+    throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // no match found
   }
 private:
   std::vector<parser> or_parsers_;
@@ -262,14 +237,14 @@ regex_node_* parser_factor(regex_param& param)
 
   auto repeat_range_zero = parser{'*', [node](regex_param& param){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
-            throw 1; // must be perceeded by a character that is not an anchor
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // must be perceeded by a character that is not an anchor
 
           param.consumed = param.regex.find_first_not_of('*', param.consumed);
           return new repeat_range_regex_node_(node, 0);
         }};
   auto repeat_range_one = parser{'+', [node](regex_param& param){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
-            throw 1; // must be perceeded by a character that is not an anchor
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // must be perceeded by a character that is not an anchor
 
           // ++ is posessive but for the sake of generation it doesn't make any
           // difference as it may always match one or more times...
@@ -278,7 +253,7 @@ regex_node_* parser_factor(regex_param& param)
         }};
   auto optional_item = parser{'?', [node](regex_param& param){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
-            throw 1; // star must be perceeded by a character that is not an anchor
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // must be perceeded by a character that is not an anchor
 
           // ? is gready 0 or 1, ?? is lazy 0 or 1 matching as few times as possible
           // so for generation sake it doesn't make any difference as it may always
@@ -295,12 +270,9 @@ regex_node_* parser_factor(regex_param& param)
         std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed); // TODO find in range 0-9 would be nice...
 
         if(end == std::experimental::string_view::npos || end == param.consumed)
-          throw 1; // TODO exception
+          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // number was expected
 
         int digit = std::stoi(param.regex.substr(param.consumed, end).to_string());
-
-        if(digit < 0)
-          throw 1; // TODO exception
 
         param.consumed = end;
 
@@ -316,8 +288,7 @@ regex_node_* parser_factor(regex_param& param)
       if(param.regex[param.consumed] != ',')
         num = digit_parser(param);
       else
-        /// TODO handle exception
-        throw 1; // syntax x{,y} is not supported
+        throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // syntax x{,y} is not supported in C++ (works as literal in online regex tester)
     }
     else
       throw 1; // TODO exception - unexpected end of regex
@@ -332,14 +303,12 @@ regex_node_* parser_factor(regex_param& param)
           node = new repeat_range_regex_node_(node, num, digit_parser(param));
       }
       else
-        /// TODO error handling
-        throw 1;
+        throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // segment not closed but end of regex reached
     }
     else if(param.regex.size() > param.consumed && param.regex[param.consumed] == '}')
       node = new repeat_regex_node_(node, num);
     else
-      /// TODO error handling
-      throw 1;
+      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unexpected character found
 
     ++param.consumed; // consume }
   }
@@ -379,7 +348,8 @@ regex_node_* parser_base(regex_param& param)
         }};
   auto any_alphanum_or_underscore = parser{'w', [](regex_param& param) // any alphanumeric characters or _
         {
-          return new or_regex_node_{new range_random_regex_node_{'a', 'z'},
+          return new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
+                                    new range_random_regex_node_{'a', 'z'},
                                     new range_random_regex_node_{'0', '9'},
                                     new literal_regex_node_{'_'}};
         }};
@@ -392,41 +362,25 @@ regex_node_* parser_base(regex_param& param)
         }};
   auto hexadecimal_ascii_character_representation = parser{'x', [](regex_param& param){ // \x00 to \x7F
           if(param.regex.size() < param.consumed+2 || !::isxdigit((int)param.regex[param.consumed]) || !::isxdigit((int)param.regex[param.consumed+1]))
-            throw 1;
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // either regex ends too soon or the next two characters are not digits
 
           int ascii_hex = std::stoi(std::string(&param.regex[param.consumed], 2), nullptr, 16);
 
           if(ascii_hex > ascii_max)
-            throw 1;
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // requested char is out of ascii bounds
 
           param.consumed += 2;
 
           return new literal_regex_node_(static_cast<char>(ascii_hex));
         }};
-  auto word_boundary = parser{'b', [any_non_whitespace_node](regex_param& param){ // not \b
-          if(param.regex.size() < param.consumed+1) // case when \b doesn't have a value after it - not valid
-            throw 1;
-
-          if(param.consumed - 2 == 0) // case when \b doesn't have a value before it - not valid
-            throw 1;
-
-          if(!::isspace(param.regex[param.consumed - 3]) && !::isspace(param.regex[param.consumed + 1]))
-            throw 1;
-
-          return new regex_node_(); // TODO remove dummy node as it is useles
+  /*auto word_boundary = parser{'b', [any_non_whitespace_node](regex_param& param){ // \b
+          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // word boundary related regex is not supported - too many cases to handle
+          return new regex_node_{}; // will never get here - required only because otherwise compiler complains regarding return statement
         }};
-  auto not_word_boundary = parser{'B', [any_non_whitespace_node](regex_param& param){ // not \b
-          if(param.regex.size() < param.consumed+1) // case when \B doesn't have a value after it - could cause a partial match
-            throw 1;
-
-          if(param.consumed - 2 == 0) // case when \B doesn't have a value before it - could cause a partial match
-            throw 1;
-
-          if(::isspace(param.regex[param.consumed - 3]) || ::isspace(param.regex[param.consumed + 1]))
-            throw 1;
-
-          return new regex_node_(); // TODO remove dummy node as it is useles
-        }};
+  auto not_word_boundary = parser{'B', [any_non_whitespace_node](regex_param& param){ // \B -> not \b
+          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // word boundary related regex is not supported - too many cases to handle
+          return new regex_node_{}; // will never get here - required only because otherwise compiler complains regarding return statement
+        }};*/
   auto backreference_parser = parser{{'1', '2', '3', '4', '5', '6', '7', '8', '9'},
         [](regex_param& param){
           std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed);
@@ -434,13 +388,21 @@ regex_node_* parser_base(regex_param& param)
           int digit = std::stoi(param.regex.substr(param.consumed-1, end).to_string());
 
           if(digit > param.captured_groups.size() || param.captured_groups[digit - 1] == nullptr)
-            throw 1; // captured group doesn't exist || capturing group while inside of it
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // captured group doesn't exist || capturing group while inside of it
           else
             param.consumed = end;
 
           return new captured_group_reference_node_(param.captured_groups[digit - 1]);
         }};
 
+  auto escaped_escape_parser = parser{'\\', [](regex_param& param){return new literal_regex_node_{'\\'};}};
+  auto escaped_optional_parser = parser{'?', [](regex_param& param){return new literal_regex_node_{'?'};}};
+  auto escaped_repeat_zero_parser = parser{'*', [](regex_param& param){return new literal_regex_node_{'*'};}};
+  auto escaped_repeat_one_parser = parser{'+', [](regex_param& param){return new literal_regex_node_{'+'};}};
+  auto escaped_repeat_parser = parser{'{', [](regex_param& param){return new literal_regex_node_{'{'};}};
+  auto escaped_group_parser = parser{'[', [](regex_param& param){return new literal_regex_node_{'['};}};
+  auto escaped_regex_start_parser = parser{'^', [](regex_param& param){return new literal_regex_node_{'^'};}};
+  auto escaped_regex_end_parser = parser{'$', [](regex_param& param){return new literal_regex_node_{'$'};}};
 
   or_parser parser_escaped {
       {form_feed,
@@ -455,11 +417,23 @@ regex_node_* parser_base(regex_param& param)
       any_alphanum_or_underscore,
       any_not_alphanum_or_underscore,
       hexadecimal_ascii_character_representation,
-      word_boundary,
-      not_word_boundary,
+      /*word_boundary,
+      not_word_boundary,*/
       null_character,
-      backreference_parser},
+      backreference_parser,
+
+      // escaped special chars
+      escaped_escape_parser,
+      escaped_optional_parser,
+      escaped_repeat_zero_parser,
+      escaped_repeat_one_parser,
+      escaped_repeat_parser,
+      escaped_group_parser,
+      escaped_regex_start_parser,
+      escaped_regex_end_parser}/*,
       [](regex_param& param){return new literal_regex_node_(param.regex[param.consumed++]);} // escaped_literal_char
+      characters that don't need to be escaped should not be supported in escape format...
+      */
     };
 
   or_parser escaped_or_literal {
@@ -489,10 +463,7 @@ regex_node_* parser_base(regex_param& param)
       {
         auto tmp_node = escaped_or_literal(param);
         if(!tmp_node)
-        {
-          /// TODO exception handling
-          throw 1;
-        }
+          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
 
         if(param.consumed+2 < param.regex.size() && param.regex[param.consumed] == '-' && param.regex[param.consumed+1] != ']')
         {
@@ -502,9 +473,8 @@ regex_node_* parser_base(regex_param& param)
 
           if(param.consumed+1 >= param.regex.size())
           {
-            /// TODO exception handling
             delete tmp_node; // TODO RAII
-            throw 1;
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // group not closed but we're already at the end of regex
           }
 
           auto tmp = end_range_escaped_or_literal(param);
@@ -512,12 +482,12 @@ regex_node_* parser_base(regex_param& param)
           {
             /// TODO exception handling
             delete tmp_node; // TODO RAII
-            throw 1;
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
           }
 
           tmp_node = new range_random_regex_node_(literal_node->getLiteral(), static_cast<literal_regex_node_*>(tmp)->getLiteral()); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
-          delete tmp;
-          delete literal_node;
+          delete tmp; // TODO RAII
+          delete literal_node; // TODO RAII
         }
 
         return tmp_node;
@@ -553,8 +523,7 @@ regex_node_* parser_base(regex_param& param)
               invert.push_back(new range_random_regex_node_(ranges[0].second + 1, ascii_max));
             }
             else if(ranges[0].first == ascii_min && ranges[0].second == ascii_max)
-              // in rare case where no characters are allowed throw an exception as regex is faulty...
-              throw 1; // TODO exception
+              throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // in rare case where no characters are allowed throw an exception as regex is faulty...
             else if(ranges[0].first == ascii_min)
               invert.push_back(new range_random_regex_node_(ranges[0].second + 1, ascii_max));
             else
@@ -582,8 +551,7 @@ regex_node_* parser_base(regex_param& param)
                     invert.push_back(new range_random_regex_node_(cur.second + 1, ascii_max));
                   }
                   else if(cur.first == ascii_min && cur.second == ascii_max)
-                    // in rare case where no characters are allowed throw an exception as regex is faulty...
-                    throw 1; // TODO exception
+                    throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // in rare case where no characters are allowed throw an exception as regex is faulty...
                   else if(cur.first == ascii_min)
                     invert.push_back(new range_random_regex_node_(cur.second + 1, ascii_max));
                   else
@@ -624,8 +592,7 @@ regex_node_* parser_base(regex_param& param)
                   invert.push_back(new range_random_regex_node_(static_cast<char>(cur.second + 1), static_cast<char>(next.first - 1)));
                 }
                 else if(cur.first == ascii_min && cur.second == ascii_max)
-                  // in rare case where no characters are allowed throw an exception as regex is faulty...
-                  throw 1; // TODO exception
+                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // in rare case where no characters are allowed throw an exception as regex is faulty...
                 // else skip the element as not allowed numbers are from beginning to end of this range
                 // TODO !min but ==max with merge, merge, merge...???
 
@@ -656,7 +623,7 @@ regex_node_* parser_base(regex_param& param)
                 return new regex_node_(); // empty
               }
               else
-                throw 1; // not enough characters...
+                throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // not enough characters...
             }
 
             int capture_index = -1;
@@ -674,7 +641,7 @@ regex_node_* parser_base(regex_param& param)
                 }
               }
               else
-                throw 1; // not enough characters
+                throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // not enough characters
             }
             else
             {
@@ -684,7 +651,7 @@ regex_node_* parser_base(regex_param& param)
 
             auto node = parser_regex(param);
             if(param.regex.size() == param.consumed)
-              throw 1; // missing closing bracket
+              throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // missing closing bracket
             ++param.consumed;
 
             if(capture_index != -1)
@@ -694,14 +661,22 @@ regex_node_* parser_base(regex_param& param)
           }}, // TODO, ')'},
         {'[', [range_or_negated_range](regex_param& param){return range_or_negated_range(param);}},
         {'\\', [parser_escaped](regex_param& param){return parser_escaped(param);}},
-        {'.', [](regex_param& param){return new random_regex_node_();}}
+        {'.', [](regex_param& param)
+          {
+            return static_cast<regex_node_*>(new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
+                                                                new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
+                                                                new range_random_regex_node_{14, ascii_max}});
+          }}
       },
       [](regex_param& param){
-          if(param.regex[param.consumed] == '$' && param.regex.size() == param.consumed + 1) // handle end of text symbol (TODO add random text generation if $ is missing at the end - check if OK)
+          if(param.regex[param.consumed] == '$' || param.regex[param.consumed] == '^')
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unsupported regex items
+
+/*          if(param.regex[param.consumed] == '$' && param.regex.size() == param.consumed + 1) // handle end of text symbol (TODO add random text generation if $ is missing at the end - check if OK)
           {
             ++param.consumed;
             return new regex_node_();
-          }
+          }*/
 
           return static_cast<regex_node_*>(new literal_regex_node_(param.regex[param.consumed++]));
         }
@@ -714,7 +689,7 @@ regex_template::regex_template(std::experimental::string_view regex)
 {
   if(regex.size())
   {
-    std::size_t consumed = (regex[0] == '^'); // set to 0 if regex doesn't start with start of text symbol (^) otherwise start with 1 (TODO add random text generation if ^ is missing at the beginning - check if OK)
+    std::size_t consumed = 0;// (regex[0] == '^'); // set to 0 if regex doesn't start with start of text symbol (^) otherwise start with 1 (TODO add random text generation if ^ is missing at the beginning - check if OK)
 
     if(!consumed || regex.size() != 1)
     {
@@ -722,10 +697,8 @@ regex_template::regex_template(std::experimental::string_view regex)
       param.consumed = consumed;
       root_node_.reset(parser_regex(param));
 
-      /// TODO in some cases this is also true: regex.size() < consumed (check why???)
       if(param.regex.size() > param.consumed)
-        // TODO throw invalid regex exception
-        throw 1;
+        throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // invalid regex
     }
   }
 }
