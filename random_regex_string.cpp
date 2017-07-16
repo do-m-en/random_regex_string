@@ -21,6 +21,8 @@
 #include "repeat_regex_node.hpp"
 #include "whitespace_regex_node.hpp"
 
+#include "ascii_nodes.hpp"
+
 using rand_regex::captured_group_reference_node_;
 using rand_regex::group_regex_node_;
 using rand_regex::literal_regex_node_;
@@ -317,12 +319,6 @@ regex_node_* parser_factor(regex_param& param)
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
 regex_node_* parser_base(regex_param& param)
 {
-  auto any_non_whitespace_node = [](){
-          return new or_regex_node_{new range_random_regex_node_{ascii_min, '\t' - 1},
-                                    new range_random_regex_node_{'\r' + 1, ' ' - 1},
-                                    new range_random_regex_node_{' ' + 1, ascii_max}};
-        };
-
   auto form_feed = parser{'f', [](regex_param& param){return new literal_regex_node_{'\f'};}};
   auto new_line = parser{'n', [](regex_param& param){return new literal_regex_node_{'\n'};}};
   auto carriage_return = parser{'r', [](regex_param& param){return new literal_regex_node_{'\r'};}};
@@ -330,34 +326,11 @@ regex_node_* parser_base(regex_param& param)
   auto vertical_tab = parser{'v', [](regex_param& param){return new literal_regex_node_{'\v'};}};
   auto any_digit = parser{'d', [](regex_param& param){return new range_random_regex_node_{'0', '9'};}};
   auto null_character = parser{'0', [](regex_param& param){return new literal_regex_node_{'\0'};}};
-  auto any_non_digit = parser{'D', [](regex_param& param){
-          return new or_regex_node_{new range_random_regex_node_{ascii_min, '0' - 1},
-                                    new range_random_regex_node_{'9' + 1, ascii_max}};
-        }};
+  auto any_non_digit = parser{'D', [](regex_param& param){return rand_regex::any_non_digit_node();}};
   auto any_whitespace = parser{'s', [](regex_param& param){return new whitespace_regex_node_{};}};
-  auto any_non_whitespace = parser{'S', [any_non_whitespace_node](regex_param& param){
-       /* '\t' // tab: 9
-          '\n' // newline: 10
-          '\v' // vertical tab: 11
-          '\f' // formfeed: 12
-          '\r' // carriage return: 13
-          ' ' // space: 32 */
-          return any_non_whitespace_node();
-        }};
-  auto any_alphanum_or_underscore = parser{'w', [](regex_param& param) // any alphanumeric characters or _
-        {
-          return new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
-                                    new range_random_regex_node_{'a', 'z'},
-                                    new range_random_regex_node_{'0', '9'},
-                                    new literal_regex_node_{'_'}};
-        }};
-  auto any_not_alphanum_or_underscore = parser{'W', [](regex_param& param){
-          return new or_regex_node_{new range_random_regex_node_{ascii_min, '0' - 1},
-                                    new range_random_regex_node_{'9' + 1, 'A' - 1},
-                                    new range_random_regex_node_{'Z' + 1, '_' - 1},
-                                    new range_random_regex_node_{'_' + 1, 'a' - 1},
-                                    new range_random_regex_node_{'z' + 1, ascii_max}};
-        }};
+  auto any_non_whitespace = parser{'S', [](regex_param& param){return rand_regex::any_non_whitespace_node();}};
+  auto any_alphanum_or_underscore = parser{'w', [](regex_param& param){return rand_regex::any_alphanum_or_underscore_node();}};
+  auto any_not_alphanum_or_underscore = parser{'W', [](regex_param& param){return rand_regex::any_not_alphanum_or_underscore_node();}};
   auto hexadecimal_ascii_character_representation = parser{'x', [](regex_param& param){ // \x00 to \x7F
           if(param.regex.size() < param.consumed+2 || !::isxdigit((int)param.regex[param.consumed]) || !::isxdigit((int)param.regex[param.consumed+1]))
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // either regex ends too soon or the next two characters are not digits
@@ -371,14 +344,7 @@ regex_node_* parser_base(regex_param& param)
 
           return new literal_regex_node_(static_cast<char>(ascii_hex));
         }};
-  /*auto word_boundary = parser{'b', [any_non_whitespace_node](regex_param& param){ // \b
-          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // word boundary related regex is not supported - too many cases to handle
-          return new regex_node_{}; // will never get here - required only because otherwise compiler complains regarding return statement
-        }};
-  auto not_word_boundary = parser{'B', [any_non_whitespace_node](regex_param& param){ // \B -> not \b
-          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // word boundary related regex is not supported - too many cases to handle
-          return new regex_node_{}; // will never get here - required only because otherwise compiler complains regarding return statement
-        }};*/
+
   auto backreference_parser = parser{{'1', '2', '3', '4', '5', '6', '7', '8', '9'},
         [](regex_param& param){
           std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed);
@@ -415,8 +381,6 @@ regex_node_* parser_base(regex_param& param)
       any_alphanum_or_underscore,
       any_not_alphanum_or_underscore,
       hexadecimal_ascii_character_representation,
-      /*word_boundary,
-      not_word_boundary,*/
       null_character,
       backreference_parser,
 
@@ -428,10 +392,7 @@ regex_node_* parser_base(regex_param& param)
       escaped_repeat_parser,
       escaped_group_parser,
       escaped_regex_start_parser,
-      escaped_regex_end_parser}/*,
-      [](regex_param& param){return new literal_regex_node_(param.regex[param.consumed++]);} // escaped_literal_char
-      characters that don't need to be escaped should not be supported in escape format...
-      */
+      escaped_regex_end_parser}
     };
 
   or_parser escaped_or_literal {
