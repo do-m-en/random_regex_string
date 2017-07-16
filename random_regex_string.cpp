@@ -118,9 +118,7 @@ public:
       bool found = false;
       for(auto& p : parsers_)
       {
-        //if(auto node = p(regex, consumed); node) - gcc is missing P0305R1 support...
-        auto node = p(param);
-        if(node)
+        if(auto node = p(param); node)
         {
           nodes.push_back(node);
           found = true;
