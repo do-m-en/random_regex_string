@@ -461,36 +461,31 @@ regex_node_* parser_base(regex_param& param)
       ']',
       [escaped_or_literal, end_range_escaped_or_literal](regex_param& param)
       {
-        auto tmp_node = escaped_or_literal(param);
-        if(!tmp_node)
+        std::unique_ptr<regex_node_> tmp_node{escaped_or_literal(param)};
+        if(!tmp_node.get())
           throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
 
         if(param.consumed+2 < param.regex.size() && param.regex[param.consumed] == '-' && param.regex[param.consumed+1] != ']')
         {
-          literal_regex_node_* literal_node = static_cast<literal_regex_node_*>(tmp_node);
+          literal_regex_node_* literal_node = static_cast<literal_regex_node_*>(tmp_node.get());
 
           ++param.consumed;
 
           if(param.consumed+1 >= param.regex.size())
           {
-            delete tmp_node; // TODO RAII
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // group not closed but we're already at the end of regex
           }
 
-          auto tmp = end_range_escaped_or_literal(param);
-          if(!tmp)
+          std::unique_ptr<regex_node_> tmp{end_range_escaped_or_literal(param)};
+          if(!tmp.get())
           {
-            /// TODO exception handling
-            delete tmp_node; // TODO RAII
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
           }
 
-          tmp_node = new range_random_regex_node_(literal_node->getLiteral(), static_cast<literal_regex_node_*>(tmp)->getLiteral()); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
-          delete tmp; // TODO RAII
-          delete literal_node; // TODO RAII
+          tmp_node.reset(new range_random_regex_node_(literal_node->getLiteral(), static_cast<literal_regex_node_*>(tmp.get())->getLiteral())); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
         }
 
-        return tmp_node;
+        return tmp_node.release();
       }
     };
 
@@ -671,12 +666,6 @@ regex_node_* parser_base(regex_param& param)
       [](regex_param& param){
           if(param.regex[param.consumed] == '$' || param.regex[param.consumed] == '^')
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unsupported regex items
-
-/*          if(param.regex[param.consumed] == '$' && param.regex.size() == param.consumed + 1) // handle end of text symbol (TODO add random text generation if $ is missing at the end - check if OK)
-          {
-            ++param.consumed;
-            return new regex_node_();
-          }*/
 
           return static_cast<regex_node_*>(new literal_regex_node_(param.regex[param.consumed++]));
         }
