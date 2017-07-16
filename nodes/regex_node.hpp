@@ -32,8 +32,8 @@ private:
 class regex_node_
 {
 public:
-  virtual void generate(std::ostream& os, random_generator_base& random_gen) {} // default for dummy node
-  virtual void regenerate(std::ostream& os) const {} // default for dummy node
+  virtual void generate(std::ostream& os, random_generator_base& random_gen, std::vector<std::tuple<int, regex_node_*>>& groups) {} // default for dummy node
+  virtual void regenerate(std::ostream& os, const std::vector<std::tuple<int, regex_node_*>>& groups) const {} // default for dummy node
 };
 
 };

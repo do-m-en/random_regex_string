@@ -43,7 +43,7 @@ void or_regex_node_::append(regex_node_* item)
   }
 }
 
-void or_regex_node_::generate(std::ostream& os, random_generator_base& random_gen)
+void or_regex_node_::generate(std::ostream& os, random_generator_base& random_gen, std::vector<std::tuple<int, regex_node_*>>& groups)
 {
   if(or_nodes_.size() == 1)
   {
@@ -54,10 +54,10 @@ void or_regex_node_::generate(std::ostream& os, random_generator_base& random_ge
     random_value_ = random_gen.get_random(0, or_nodes_.size() - 1);
   }
 
-  or_nodes_[random_value_]->generate(os, random_gen);
+  or_nodes_[random_value_]->generate(os, random_gen, groups);
 }
 
-void or_regex_node_::regenerate(std::ostream& os) const
+void or_regex_node_::regenerate(std::ostream& os, const std::vector<std::tuple<int, regex_node_*>>& groups) const
 {
-  or_nodes_[random_value_]->regenerate(os);
+  or_nodes_[random_value_]->regenerate(os, groups);
 }

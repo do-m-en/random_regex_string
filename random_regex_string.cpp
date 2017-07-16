@@ -651,5 +651,8 @@ void regex_template::generate(std::ostream& os) const
   random_generator<> rand; // TODO should be provided from the outside
 
   if(root_node_.get()) // TODO this if could be changed for dummy regex node
-    root_node_->generate(os, rand);
+  {
+    std::vector<std::tuple<int, regex_node_*>> groups;
+    root_node_->generate(os, rand, groups);
+  }
 }

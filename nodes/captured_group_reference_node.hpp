@@ -10,8 +10,8 @@ class captured_group_reference_node_ : public regex_node_ // capturing (stuff) w
 {
 public:
   captured_group_reference_node_(regex_node_* referred_node);
-  void generate(std::ostream& os, random_generator_base& random_gen) override;
-  void regenerate(std::ostream& os) const override;
+  void generate(std::ostream& os, random_generator_base& random_gen, std::vector<std::tuple<int, regex_node_*>>& groups) override;
+  void regenerate(std::ostream& os, const std::vector<std::tuple<int, regex_node_*>>& groups) const override;
 
 private:
   regex_node_* referred_node_;
