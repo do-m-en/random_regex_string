@@ -678,17 +678,12 @@ regex_template::regex_template(std::experimental::string_view regex)
 {
   if(regex.size())
   {
-    std::size_t consumed = 0;// (regex[0] == '^'); // set to 0 if regex doesn't start with start of text symbol (^) otherwise start with 1 (TODO add random text generation if ^ is missing at the beginning - check if OK)
+    regex_param param{regex};
+    param.consumed = 0;
+    root_node_.reset(parser_regex(param));
 
-    if(!consumed || regex.size() != 1)
-    {
-      regex_param param{regex};
-      param.consumed = consumed;
-      root_node_.reset(parser_regex(param));
-
-      if(param.regex.size() > param.consumed)
-        throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // invalid regex
-    }
+    if(param.regex.size() > param.consumed)
+      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // invalid regex
   }
 }
 
