@@ -317,41 +317,45 @@ regex_node_* parser_factor(regex_param& param)
         return digit;
       };
 
-  if(param.consumed < param.regex.size() && param.regex[param.consumed] == '{')
-  {
-    ++param.consumed; // consume {
-    std::size_t num = 0;
-    if(param.consumed < param.regex.size())
-    {
-      if(param.regex[param.consumed] != ',')
-        num = digit_parser(param);
-      else
-        throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // syntax x{,y} is not supported in C++ (works as literal in online regex tester)
-    }
-    else
-      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // exception - unexpected end of regex
+  // {x[,y]}
+  auto limited_repetition_parser =
+       ('{'_lp
+          >> [&](regex_param& param) {
+                std::size_t num = 0;
+                if(param.consumed < param.regex.size())
+                {
+                  if(param.regex[param.consumed] != ',')
+                    num = digit_parser(param);
+                  else
+                    throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // syntax x{,y} is not supported in C++ (works as literal in online regex tester)
+                }
+                else
+                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // exception - unexpected end of regex
 
-    if(param.consumed < param.regex.size() && param.regex[param.consumed] == ',')
-    {
-      if(param.regex.size() > ++param.consumed)
-      {
-        if(param.regex[param.consumed] == '}')
-          node = new repeat_range_regex_node_(node, num);
-        else
-          node = new repeat_range_regex_node_(node, num, digit_parser(param));
-      }
-      else
-        throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // segment not closed but end of regex reached
-    }
-    else if(param.regex.size() > param.consumed && param.regex[param.consumed] == '}')
-      node = new repeat_regex_node_(node, num);
-    else
-      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unexpected character found
+                if(param.consumed < param.regex.size() && param.regex[param.consumed] == ',')
+                {
+                  if(param.regex.size() > ++param.consumed)
+                  {
+                    if(param.regex[param.consumed] == '}')
+                      node = new repeat_range_regex_node_(node, num);
+                    else
+                      node = new repeat_range_regex_node_(node, num, digit_parser(param));
+                  }
+                  else
+                    throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // segment not closed but end of regex reached
+                }
+                else if(param.regex.size() > param.consumed && param.regex[param.consumed] == '}')
+                  node = new repeat_regex_node_(node, num);
+                else
+                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unexpected character found
 
-    ++param.consumed; // consume }
-  }
+                ++param.consumed; // consume }
 
-  return node;
+                return node;
+              })
+    | [&](regex_param& param){return node;};
+
+  return limited_repetition_parser(param);
 }
 
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
