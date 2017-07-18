@@ -104,59 +104,6 @@ private:
   regex_consumer_function consumer_;
 };
 
-struct and_parser
-{
-public:
-  and_parser(std::initializer_list<parser> and_parsers, char terminator,
-        regex_consumer_function else_parser = nullptr)
-    : parsers_{and_parsers}, terminator_{terminator}, else_parser_{else_parser} {}
-
-  // TODO this should be optional return value
-  std::vector<regex_node_*> operator()(regex_param& param) const
-  {
-    std::vector<regex_node_*> nodes;
-
-    while(param.regex.size() > param.consumed && param.regex[param.consumed] != terminator_)
-    {
-      bool found = false;
-      for(auto& p : parsers_)
-      {
-        if(auto node = p(param); node)
-        {
-          nodes.push_back(node);
-          found = true;
-          break;
-        }
-      }
-
-      if(!found)
-      {
-        if(else_parser_)
-          nodes.push_back(else_parser_(param)); // TODO check if null is returned...
-        else
-        {
-          for(auto node : nodes)
-            delete node;
-
-          nodes.clear();
-
-          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // no match found
-        }
-      }
-    }
-
-    if(param.regex.size() == param.consumed && param.regex[param.consumed-1] != terminator_)
-      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // terminator not found
-
-    return nodes;
-  }
-
-private:
-  std::vector<parser> parsers_;
-  regex_consumer_function else_parser_; // TODO define signature...
-  char terminator_;
-};
-
 template<typename Left, typename Right>
 struct sequence_parser
 {
@@ -192,6 +139,21 @@ auto operator "" _lp(char literal)
                 {
                   ++param.consumed;
 
+                  return true;
+                }
+              }
+
+              return false;
+            };
+}
+
+auto operator "" _nlp(char literal)
+{
+  return [=](regex_param& param){
+              if(param.regex.size() > param.consumed)
+              {
+                if(param.regex[param.consumed] != literal)
+                {
                   return true;
                 }
               }
@@ -453,43 +415,49 @@ regex_node_* parser_base(regex_param& param)
         ('\\'_lp >> [parse_end_range_escaped](regex_param& param){return parse_end_range_escaped(param);})
       | [](regex_param& param){return new literal_regex_node_(param.regex[param.consumed++]);};
 
-  and_parser range_parser {
-      {},
-      ']',
-      [escaped_or_literal, end_range_escaped_or_literal](regex_param& param)
-      {
-        std::unique_ptr<regex_node_> tmp_node{escaped_or_literal(param)};
-        if(!tmp_node.get())
-          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
-
-        if(param.consumed+2 < param.regex.size() && param.regex[param.consumed] == '-' && param.regex[param.consumed+1] != ']')
-        {
-          literal_regex_node_* literal_node = static_cast<literal_regex_node_*>(tmp_node.get());
-
-          ++param.consumed;
-
-          if(param.consumed+1 >= param.regex.size())
+  auto range_parser =
+       ']'_nlp
+      >> [escaped_or_literal, end_range_escaped_or_literal](regex_param& param)
           {
-            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // group not closed but we're already at the end of regex
-          }
+            std::unique_ptr<regex_node_> tmp_node{escaped_or_literal(param)};
+            if(!tmp_node.get())
+              throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
 
-          std::unique_ptr<regex_node_> tmp{end_range_escaped_or_literal(param)};
-          if(!tmp.get())
-          {
-            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
-          }
+            if(param.consumed+2 < param.regex.size() && param.regex[param.consumed] == '-' && param.regex[param.consumed+1] != ']')
+            {
+              literal_regex_node_* literal_node = static_cast<literal_regex_node_*>(tmp_node.get());
 
-          tmp_node.reset(new range_random_regex_node_(literal_node->getLiteral(), static_cast<literal_regex_node_*>(tmp.get())->getLiteral())); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
-        }
+              ++param.consumed;
 
-        return tmp_node.release();
-      }
-    };
+              if(param.consumed+1 >= param.regex.size())
+              {
+                throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // group not closed but we're already at the end of regex
+              }
+
+              std::unique_ptr<regex_node_> tmp{end_range_escaped_or_literal(param)};
+              if(!tmp.get())
+              {
+                throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
+              }
+
+              tmp_node.reset(new range_random_regex_node_(literal_node->getLiteral(), static_cast<literal_regex_node_*>(tmp.get())->getLiteral())); // TODO range_random_regex_node_ should take two regex_node elements and cast them to literal_regex_node_
+            }
+
+            return tmp_node.release();
+          };
 
   auto range_or_negated_range =
         ('^'_lp >> [range_parser](regex_param& param){
-          auto tmp = range_parser(param);
+          std::vector<regex_node_*> tmp;
+          for(auto item = range_parser(param); item != nullptr; item = range_parser(param))
+          {
+            tmp.push_back(item);
+          }
           // TODO check if range parser returns an empty vector
+
+          if(param.regex[param.consumed] != ']') // TODO delete nodes before this point
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // terminator not found*/
+          ++param.consumed;
 
           std::vector<regex_node_*> invert;
           std::vector<std::pair<char, char>> ranges;
@@ -594,13 +562,21 @@ regex_node_* parser_base(regex_param& param)
             }
           }
 
-          ++param.consumed; // consume ]
           return new or_regex_node_(std::move(invert));
         })
       | [range_parser](regex_param& param){
-          auto tmp = new or_regex_node_(range_parser(param)); // TODO check if range parser returns an empty vector
-          ++param.consumed; // consume ]
-          return tmp;
+          std::vector<regex_node_*> items;
+          for(auto tmp = range_parser(param); tmp != nullptr; tmp = range_parser(param))
+          {
+            items.push_back(tmp);
+          }
+          // TODO check if range parser returns an empty vector
+
+          if(param.regex[param.consumed] != ']') // TODO delete nodes before this point
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // terminator not found*/
+          ++param.consumed;
+
+          return new or_regex_node_(std::move(items));
         };
 
   auto parser_base_type =
