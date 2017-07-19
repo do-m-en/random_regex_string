@@ -77,7 +77,7 @@ inline sequence_parser<Left, Right> operator>>(
   return sequence_parser<Left, Right>{left, right};
 }
 
-auto operator "" _lp(char literal)
+inline auto operator "" _lp(char literal)
 {
   return [=](regex_param& param){
               if(param.regex.size() > param.consumed)
@@ -94,7 +94,7 @@ auto operator "" _lp(char literal)
             };
 }
 
-auto operator "" _nlp(char literal)
+inline auto operator "" _nlp(char literal)
 {
   return [=](regex_param& param){
               if(param.regex.size() > param.consumed)
@@ -157,6 +157,15 @@ inline alternative_parser_bool<Left, Right> operator>(
 {
   return alternative_parser_bool<Left, Right>{left, right};
 }
+
+// ---- generator
+inline auto operator "" _lg(char literal)
+{
+  return [=](regex_param& param){
+              return new literal_regex_node_{literal};
+            };
+}
+// ---- generator end
 
 regex_node_* parser_term(regex_param& param);
 regex_node_* parser_factor(regex_param& param);
@@ -295,13 +304,13 @@ regex_node_* parser_factor(regex_param& param)
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
 regex_node_* parser_base(regex_param& param)
 {
-  auto form_feed = 'f'_lp >> [](regex_param& param){return new literal_regex_node_{'\f'};};
-  auto new_line = 'n'_lp >> [](regex_param& param){return new literal_regex_node_{'\n'};};
-  auto carriage_return = 'r'_lp >> [](regex_param& param){return new literal_regex_node_{'\r'};};
-  auto horizontal_tab = 't'_lp >> [](regex_param& param){return new literal_regex_node_{'\t'};};
-  auto vertical_tab = 'v'_lp >> [](regex_param& param){return new literal_regex_node_{'\v'};};
+  auto form_feed = 'f'_lp >> '\f'_lg;
+  auto new_line = 'n'_lp >> '\n'_lg;
+  auto carriage_return = 'r'_lp >> '\r'_lg;
+  auto horizontal_tab = 't'_lp >> '\t'_lg;
+  auto vertical_tab = 'v'_lp >> '\v'_lg;
   auto any_digit = 'd'_lp >> [](regex_param& param){return new range_random_regex_node_{'0', '9'};};
-  auto null_character = '0'_lp >> [](regex_param& param){return new literal_regex_node_{'\0'};};
+  auto null_character = '0'_lp >> '\0'_lg;
   auto any_non_digit = 'D'_lp >> [](regex_param& param){return rand_regex::any_non_digit_node();};
   auto any_whitespace = 's'_lp >> [](regex_param& param){return new whitespace_regex_node_{};};
   auto any_non_whitespace = 'S'_lp >> [](regex_param& param){return rand_regex::any_non_whitespace_node();};
@@ -335,14 +344,14 @@ regex_node_* parser_base(regex_param& param)
           return new captured_group_reference_node_(param.captured_groups[digit - 1]);
         };
 
-  auto escaped_escape_parser = '\\'_lp >> [](regex_param& param){return new literal_regex_node_{'\\'};};
-  auto escaped_optional_parser = '?'_lp >> [](regex_param& param){return new literal_regex_node_{'?'};};
-  auto escaped_repeat_zero_parser = '*'_lp >> [](regex_param& param){return new literal_regex_node_{'*'};};
-  auto escaped_repeat_one_parser = '+'_lp >> [](regex_param& param){return new literal_regex_node_{'+'};};
-  auto escaped_repeat_parser = '{'_lp >> [](regex_param& param){return new literal_regex_node_{'{'};};
-  auto escaped_group_parser = '['_lp >> [](regex_param& param){return new literal_regex_node_{'['};};
-  auto escaped_regex_start_parser = '^'_lp >> [](regex_param& param){return new literal_regex_node_{'^'};};
-  auto escaped_regex_end_parser = '$'_lp >> [](regex_param& param){return new literal_regex_node_{'$'};};
+  auto escaped_escape_parser = '\\'_lp >> '\\'_lg;
+  auto escaped_optional_parser = '?'_lp >> '?'_lg;
+  auto escaped_repeat_zero_parser = '*'_lp >> '*'_lg;
+  auto escaped_repeat_one_parser = '+'_lp >> '+'_lg;
+  auto escaped_repeat_parser = '{'_lp >> '{'_lg;
+  auto escaped_group_parser = '['_lp >> '['_lg;
+  auto escaped_regex_start_parser = '^'_lp >> '^'_lg;
+  auto escaped_regex_end_parser = '$'_lp >> '$'_lg;
 
   auto parser_escaped = 
         form_feed
