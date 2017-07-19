@@ -48,61 +48,8 @@ struct regex_param
   std::vector<regex_node_*> captured_groups;
 };
 
-using regex_consumer_function = std::function<regex_node_* (regex_param&)>;
-
 // class regex_template
 using rand_regex::regex_template;
-
-struct parser
-{
-public:
-  parser(char start_token, regex_consumer_function consumer)
-    : start_tokens_{{start_token}}
-    , consumer_{consumer}
-  {
-    //
-  }
-
-  parser(std::vector<char> start_tokens, regex_consumer_function consumer)
-    : start_tokens_{std::forward<std::vector<char>>(start_tokens)}
-    , consumer_{consumer}
-  {
-    //
-  }
-
-  // TODO add size checked and unchecked version as other parser types can handle check at the top level for all (or/and parsers)
-  //      for now failing size checks forces or/and parsers to continue untill all parsers are used up
-  regex_node_* operator()(regex_param& param) const
-  {
-    regex_node_* node = nullptr;
-
-    if(param.regex.size() > param.consumed)
-    {
-      for(auto start_token : start_tokens_)
-      {
-        if(param.regex[param.consumed] == start_token)
-        {
-          ++param.consumed;
-          node = consumer_(param);
-
-          if(!node)
-          {
-            --param.consumed;
-            throw std::runtime_error("Regex error at " + std::to_string(param.consumed));
-          }
-
-          break;
-        }
-      }
-    }
-
-    return node;
-  }
-
-private:
-  std::vector<char> start_tokens_;
-  regex_consumer_function consumer_;
-};
 
 template<typename Left, typename Right>
 struct sequence_parser
@@ -184,6 +131,31 @@ inline alternative_parser<Left, Right> operator|(
   const Left& left, const Right& right)
 {
   return alternative_parser<Left, Right>{left, right};
+}
+
+
+template<typename Left, typename Right>
+struct alternative_parser_bool
+{
+  alternative_parser_bool(Left left, Right right) : left_{left}, right_{right} {}
+
+  bool operator()(regex_param& param) const
+  {
+    if(bool ok = left_(param); ok)
+      return true;
+
+    return right_(param);
+  }
+
+  Left left_;
+  Right right_;
+};
+
+template<typename Left, typename Right>
+inline alternative_parser_bool<Left, Right> operator>(
+  const Left& left, const Right& right)
+{
+  return alternative_parser_bool<Left, Right>{left, right};
 }
 
 regex_node_* parser_term(regex_param& param);
@@ -349,7 +321,7 @@ regex_node_* parser_base(regex_param& param)
           return new literal_regex_node_(static_cast<char>(ascii_hex));
         };
 
-  auto backreference_parser = parser{{'1', '2', '3', '4', '5', '6', '7', '8', '9'},
+  auto backreference_parser = ('1'_lp > '2'_lp > '3'_lp > '4'_lp > '5'_lp > '6'_lp > '7'_lp > '8'_lp > '9'_lp) >>
         [](regex_param& param){
           std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed);
 
@@ -361,7 +333,7 @@ regex_node_* parser_base(regex_param& param)
             param.consumed = end;
 
           return new captured_group_reference_node_(param.captured_groups[digit - 1]);
-        }};
+        };
 
   auto escaped_escape_parser = '\\'_lp >> [](regex_param& param){return new literal_regex_node_{'\\'};};
   auto escaped_optional_parser = '?'_lp >> [](regex_param& param){return new literal_regex_node_{'?'};};
@@ -627,7 +599,13 @@ regex_node_* parser_base(regex_param& param)
               return node;
             }) // TODO, ')'},
         | ('['_lp >> [range_or_negated_range](regex_param& param){return range_or_negated_range(param);})
-        | parser{'\\', [parser_escaped](regex_param& param){return parser_escaped(param);}} // FIXME nullptr return handling...
+        | ('\\'_lp >> [parser_escaped](regex_param& param){
+            auto node = parser_escaped(param);
+            if(node == nullptr)
+              throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // FIXME add more returned nullptr handling...
+
+            return node;
+          }) // FIXME nullptr return handling...
         | ('.'_lp >> [](regex_param& param){return rand_regex::dot_node();})
         | [](regex_param& param){
             if(param.regex[param.consumed] == '$' || param.regex[param.consumed] == '^')
