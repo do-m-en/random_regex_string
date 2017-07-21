@@ -21,6 +21,7 @@
 #include "repeat_range_regex_node.hpp"
 #include "repeat_regex_node.hpp"
 #include "whitespace_regex_node.hpp"
+#include "inner_group_node.hpp"
 
 #include "ascii_nodes.hpp"
 
@@ -35,6 +36,7 @@ using rand_regex::regex_node_;
 using rand_regex::repeat_range_regex_node_;
 using rand_regex::repeat_regex_node_;
 using rand_regex::whitespace_regex_node_;
+using rand_regex::inner_group_node_;
 
 constexpr char ascii_min = 0;
 constexpr char ascii_max = 127;
@@ -45,7 +47,7 @@ struct regex_param
 
   std::string_view regex;
   std::size_t consumed = 0;
-  std::vector<regex_node_*> captured_groups;
+  std::vector<bool> captured_groups;
 };
 
 // class regex_template
@@ -337,12 +339,12 @@ regex_node_* parser_base(regex_param& param)
 
           int digit = std::stoi(std::string(param.regex.substr(param.consumed-1, end)));
 
-          if(digit > param.captured_groups.size() || param.captured_groups[digit - 1] == nullptr)
+          if(digit > param.captured_groups.size() || param.captured_groups[digit - 1] == false)
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // captured group doesn't exist || capturing group while inside of it
           else
             param.consumed = end;
 
-          return new captured_group_reference_node_(param.captured_groups[digit - 1]);
+          return new captured_group_reference_node_(digit - 1);
         };
 
   auto escaped_escape_parser = '\\'_lp >> '\\'_lg;
@@ -594,7 +596,7 @@ regex_node_* parser_base(regex_param& param)
               }
               else
               {
-                param.captured_groups.push_back(nullptr);
+                param.captured_groups.push_back(false);
                 capture_index = param.captured_groups.size() - 1;
               }
 
@@ -604,9 +606,9 @@ regex_node_* parser_base(regex_param& param)
               ++param.consumed;
 
               if(capture_index != -1)
-                param.captured_groups[capture_index] = node;
+                param.captured_groups[capture_index] = true;
 
-              return node;
+              return static_cast<regex_node_*>(new inner_group_node_{node, capture_index});
             }) // TODO, ')'},
         | ('['_lp >> [range_or_negated_range](regex_param& param){return range_or_negated_range(param);})
         | ('\\'_lp >> [parser_escaped](regex_param& param){

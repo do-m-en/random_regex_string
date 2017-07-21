@@ -4,6 +4,8 @@ project(random_regex_string CXX)
 
 add_definitions(-std=c++1z)
 
+#add_definitions(-fsanitize=undefined -fsanitize=leak -fsanitize=address)
+
 add_library(${PROJECT_NAME}
   random_regex_string.cpp
 
@@ -17,6 +19,7 @@ add_library(${PROJECT_NAME}
   ./nodes/repeat_range_regex_node.cpp
   ./nodes/repeat_regex_node.cpp
   ./nodes/whitespace_regex_node.cpp
+  ./nodes/inner_group_node.cpp
 
   unicode/blocks.cpp
 )
@@ -24,4 +27,5 @@ target_include_directories(${PROJECT_NAME} PUBLIC ./nodes)
 
 add_executable(test_rrs test_main.cpp)
 target_include_directories(test_rrs PUBLIC ./nodes)
+#target_link_libraries(test_rrs asan ubsan)
 target_link_libraries(test_rrs ${PROJECT_NAME})

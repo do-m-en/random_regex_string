@@ -9,12 +9,12 @@ namespace rand_regex {
 class captured_group_reference_node_ : public regex_node_ // capturing (stuff) with \number
 {
 public:
-  captured_group_reference_node_(regex_node_* referred_node);
+  captured_group_reference_node_(int referred_node);
   void generate(std::ostream& os, random_generator_base& random_gen, std::vector<std::tuple<int, regex_node_*>>& groups) override;
   void regenerate(std::ostream& os, const std::vector<std::tuple<int, regex_node_*>>& groups) const override;
 
 private:
-  regex_node_* referred_node_;
+  int referred_group_;
 };
 
 };
