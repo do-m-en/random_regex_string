@@ -41,9 +41,9 @@ constexpr char ascii_max = 127;
 
 struct regex_param
 {
-  regex_param(std::experimental::string_view regex_) : regex{regex_} {}
+  regex_param(std::string_view regex_) : regex{regex_} {}
 
-  std::experimental::string_view regex;
+  std::string_view regex;
   std::size_t consumed = 0;
   std::vector<regex_node_*> captured_groups;
 };
@@ -145,6 +145,7 @@ struct alternative_parser_bool
       return true;
 
     return right_(param);
+    // FIXME this alternative somehow causes a test to fail: return (left_(param) | right_(param));
   }
 
   Left left_;
@@ -250,10 +251,10 @@ regex_node_* parser_factor(regex_param& param)
   auto digit_parser = [](regex_param& param){
         std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed); // TODO find in range 0-9 would be nice...
 
-        if(end == std::experimental::string_view::npos || end == param.consumed)
+        if(end == std::string_view::npos || end == param.consumed)
           throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // number was expected
 
-        int digit = std::stoi(param.regex.substr(param.consumed, end).to_string());
+        int digit = std::stoi(std::string(param.regex.substr(param.consumed, end)));
 
         param.consumed = end;
 
@@ -334,7 +335,7 @@ regex_node_* parser_base(regex_param& param)
         [](regex_param& param){
           std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed);
 
-          int digit = std::stoi(param.regex.substr(param.consumed-1, end).to_string());
+          int digit = std::stoi(std::string(param.regex.substr(param.consumed-1, end)));
 
           if(digit > param.captured_groups.size() || param.captured_groups[digit - 1] == nullptr)
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // captured group doesn't exist || capturing group while inside of it
@@ -626,7 +627,7 @@ regex_node_* parser_base(regex_param& param)
   return parser_base_type(param);
 }
 
-regex_template::regex_template(std::experimental::string_view regex)
+regex_template::regex_template(std::string_view regex)
 {
   if(regex.size())
   {

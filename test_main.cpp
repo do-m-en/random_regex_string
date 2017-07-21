@@ -17,7 +17,7 @@ namespace {
       regex_error_but_parsing_passed
     };
 
-  std::pair<test_result, std::string> execute_regex(std::experimental::string_view regex)
+  std::pair<test_result, std::string> execute_regex(std::string_view regex)
   {
     try
     {
@@ -63,9 +63,9 @@ namespace {
     return std::make_pair(test_result::OK, "");
   }
 
-  std::pair<std::experimental::string_view, std::string> simplify_regex(std::experimental::string_view regex, test_result reproducing_result)
+  std::pair<std::string_view, std::string> simplify_regex(std::string_view regex, test_result reproducing_result)
   {
-    std::experimental::string_view working_regex{regex};
+    std::string_view working_regex{regex};
     std::string simplified_result;
 
     // subdivide untill it no longer matches
@@ -74,7 +74,7 @@ namespace {
       if(working_regex.size() == 1) // prevent cycling
         break;
 
-      std::experimental::string_view current_regex{working_regex.substr(0, working_regex.size()/2)};
+      std::string_view current_regex{working_regex.substr(0, working_regex.size()/2)};
       auto result = execute_regex(current_regex);
       if(reproducing_result == result.first)
       {
@@ -103,7 +103,7 @@ namespace {
       if(working_regex.size() == 1) // prevent cycling
         break;
 
-      std::experimental::string_view current_regex{working_regex.substr(0, working_regex.size()-1)};
+      std::string_view current_regex{working_regex.substr(0, working_regex.size()-1)};
       auto result = execute_regex(current_regex);
       if(reproducing_result == result.first)
       {
@@ -121,7 +121,7 @@ namespace {
       if(working_regex.size() == 1) // prevent cycling
         break;
 
-      std::experimental::string_view current_regex{working_regex.substr(1)};
+      std::string_view current_regex{working_regex.substr(1)};
       auto result = execute_regex(current_regex);
       if(reproducing_result == result.first)
       {
@@ -152,7 +152,7 @@ namespace {
     return std::make_pair(final_regex, simplified_result);
   }
 
-  std::string convert_chars_to_visible(std::experimental::string_view input)
+  std::string convert_chars_to_visible(std::string_view input)
   {
     std::string converted;
     const char hex[] = "0123456789ABCDEF";
@@ -236,13 +236,13 @@ namespace {
 }
 
 namespace {
-  void test_regex_ECMAScript(std::experimental::string_view regex)
+  void test_regex_ECMAScript(const std::string& regex)
   {
     using rand_regex::regex_template;
 
     std::cout << "regex='" << regex << "'";
 
-    std::regex rx(regex.to_string()); // check the validity of a regex first
+    std::regex rx(regex); // check the validity of a regex first
     std::cout << " std::regex valid";
     regex_template generator(regex);
 
@@ -268,7 +268,7 @@ namespace {
     std::cout << "    distinct: " << distinct.size() << '/' << max << '\n';
   }
 
-  void test_negative_regex_ECMAScript(std::experimental::string_view regex)
+  void test_negative_regex_ECMAScript(const std::string& regex)
   {
     using rand_regex::regex_template;
 
@@ -276,7 +276,7 @@ namespace {
 
     try
     {
-      std::regex rx(regex.to_string()); // check the validity of a regex first
+      std::regex rx(regex); // check the validity of a regex first
       std::cout << "rx is ok!\n";
     }
     catch(...)
@@ -297,7 +297,7 @@ namespace {
   }
 
 
-  void test_invalid_regex_ECMAScript(std::experimental::string_view regex)
+  void test_invalid_regex_ECMAScript(const std::string& regex)
   {
     using rand_regex::regex_template;
 
@@ -305,7 +305,7 @@ namespace {
 
     try
     {
-      std::regex rx(regex.to_string()); // check the validity of a regex first
+      std::regex rx(regex); // check the validity of a regex first
       if(std::regex_match("abc", rx)) // here only because we want to prevent rx from being removed by the optimizer...
       {
         std::cout << "foooo\n";
@@ -335,7 +335,7 @@ namespace {
     if(success)
       throw std::runtime_error("unexpected invalid test success!");
   }
-  void test_unsupported_regex_ECMAScript(std::experimental::string_view regex)
+  void test_unsupported_regex_ECMAScript(std::string_view regex)
   {
     using rand_regex::regex_template;
 
