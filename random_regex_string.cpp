@@ -145,7 +145,6 @@ inline auto operator "" _lg(char literal)
 }
 // ---- generator end
 
-bool parser_term(regex_param& param, regex_node_*& node);
 bool parser_factor(regex_param& param, regex_node_*& node);
 bool parser_base(regex_param& param, regex_node_*& node);
 
@@ -157,7 +156,22 @@ bool parser_regex(regex_param& param, regex_node_*& node)
     ++param.consumed;
   }
 
-  bool ok = parser_term(param, node);
+  // <term> ::= { <factor> }
+  auto term = [](regex_param& param, auto& node) {
+      bool ok = parser_factor(param, node);
+
+      while(ok && param.consumed < param.regex.size() && param.regex[param.consumed] != ')'
+        && param.regex[param.consumed] != '|')
+      {
+        regex_node_* next = nullptr;
+        ok = parser_factor(param, next);
+        node = new group_regex_node_(std::vector<regex_node_*>{node, next}); // TODO consider renaming it to sequence
+      }
+
+      return ok;
+    };
+
+  bool ok = term(param, node);
 
   if(ok && param.consumed < param.regex.size() && param.regex[param.consumed] == '|')
   {
@@ -165,22 +179,6 @@ bool parser_regex(regex_param& param, regex_node_*& node)
     regex_node_* other = nullptr;
     ok = parser_regex(param, other);
     node = new or_regex_node_{node, other};
-  }
-
-  return ok;
-}
-
-// <term> ::= { <factor> }
-bool parser_term(regex_param& param, regex_node_*& node)
-{
-  bool ok = parser_factor(param, node);
-
-  while(ok && param.consumed < param.regex.size() && param.regex[param.consumed] != ')'
-    && param.regex[param.consumed] != '|')
-  {
-    regex_node_* next = nullptr;
-    ok = parser_factor(param, next);
-    node = new group_regex_node_(std::vector<regex_node_*>{node, next}); // TODO consider renaming it to sequence
   }
 
   return ok;
