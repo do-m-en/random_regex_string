@@ -374,6 +374,7 @@ int main()
     test_regex_ECMAScript("a|f|gh");
     test_regex_ECMAScript("ab|fe|gh");
 
+    test_regex_ECMAScript("()");
     test_regex_ECMAScript("(a)");
 
     test_regex_ECMAScript("[a]");
