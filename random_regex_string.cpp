@@ -279,10 +279,8 @@ bool parser_factor(regex_param& param, regex_node_*& node)
                 else
                   throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unexpected character found
 
-                ++param.consumed; // consume }
-
                 return true;
-              })
+              } >> '}'_lp)
     | [](regex_param& param, regex_node_*& node){return true;};
 
   return limited_repetition_parser(param, node);
@@ -597,9 +595,8 @@ bool parser_base(regex_param& param, regex_node_*& node)
                                         bool ok = parser_regex(param, node);
                                         if(!ok || param.regex.size() == param.consumed)
                                           throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // missing closing bracket
-                                        ++param.consumed;
                                         return true;
-                                      }))
+                                      } >> ')'_lp))
               |
               [](regex_param& param, regex_node_*& node) // capture group
               {
@@ -610,12 +607,11 @@ bool parser_base(regex_param& param, regex_node_*& node)
                 bool ok = parser_regex(param, tmp_node);
                 if(!ok || param.regex.size() == param.consumed)
                   throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // missing closing bracket
-                ++param.consumed;
                 param.captured_groups[capture_index] = true;
 
                 node = new inner_group_node_{tmp_node, capture_index};
                 return true;
-              })) // TODO, ')'},
+              } >> ')'_lp))
         | ('['_lp >> [range_or_negated_range](regex_param& param, regex_node_*& node){
               return range_or_negated_range(param, node);
             })
