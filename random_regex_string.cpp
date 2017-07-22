@@ -579,57 +579,43 @@ bool parser_base(regex_param& param, regex_node_*& node)
           return true;
         };
 
+  auto empty_group_end = ')'_lp >> [](regex_param& param, regex_node_*& node){ // handle empty group
+                            node = new regex_node_(); // empty
+                            return true;
+                          };
+
   auto parser_base_type =
-          ('('_lp >> [](regex_param& param, regex_node_*& node)
-            {
-              if(param.regex.size() == param.consumed + 1) // handle () case
-              {
-                if(param.regex[param.consumed] == ')')
-                {
-                  ++param.consumed;
-                  node = new regex_node_(); // empty
-                  return true;
-                }
-                else
-                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // not enough characters...
-              }
-
-              int capture_index = -1;
-              if(param.regex[param.consumed] == '?')
-              {
-                // (?:...) is a non capturing group
-                if(param.regex.size() > param.consumed + 2 && param.regex[param.consumed+1] == ':')
-                {
-                  param.consumed += 2; // discard matches everything enclosed as that's exactly what will be generated anyway
-
-                  if(param.regex[param.consumed] == ')') // handle (?:) case
-                  {
-                    ++param.consumed;
-                    node = new regex_node_(); // empty
-                    return true;
-                  }
-                }
-                else
-                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // not enough characters
-              }
-              else
+          ('('_lp >>
+            ( empty_group_end
+              |
+              ( // non capturing group
+                '?'_lp >> (':'_lp | [](regex_param& param, regex_node_*& node) -> bool {
+                                      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // not enough characters
+                                    }) >> (empty_group_end
+                                      |
+                                      [](regex_param& param, regex_node_*& node){
+                                        bool ok = parser_regex(param, node);
+                                        if(!ok || param.regex.size() == param.consumed)
+                                          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // missing closing bracket
+                                        ++param.consumed;
+                                        return true;
+                                      }))
+              |
+              [](regex_param& param, regex_node_*& node) // capture group
               {
                 param.captured_groups.push_back(false);
-                capture_index = param.captured_groups.size() - 1;
-              }
+                int capture_index = param.captured_groups.size() - 1;
 
-              regex_node_* tmp_node = nullptr;
-              bool ok = parser_regex(param, tmp_node);
-              if(!ok || param.regex.size() == param.consumed)
-                throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // missing closing bracket
-              ++param.consumed;
-
-              if(capture_index != -1)
+                regex_node_* tmp_node = nullptr;
+                bool ok = parser_regex(param, tmp_node);
+                if(!ok || param.regex.size() == param.consumed)
+                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // missing closing bracket
+                ++param.consumed;
                 param.captured_groups[capture_index] = true;
 
-              node = new inner_group_node_{tmp_node, capture_index}; // FIXME non capturing case should not have inner group node...
-              return true;
-            }) // TODO, ')'},
+                node = new inner_group_node_{tmp_node, capture_index};
+                return true;
+              })) // TODO, ')'},
         | ('['_lp >> [range_or_negated_range](regex_param& param, regex_node_*& node){
               return range_or_negated_range(param, node);
             })
