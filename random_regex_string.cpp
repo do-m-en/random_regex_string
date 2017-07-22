@@ -58,7 +58,7 @@ struct sequence_parser
 {
   sequence_parser(Left left, Right right) : left_{left}, right_{right} {}
 
-  bool operator()(regex_param& param, regex_node_*& node) const
+  bool operator()(regex_param& param, auto& node) const
   {
     if(auto result = left_(param, node); result)
     {
@@ -81,7 +81,7 @@ inline sequence_parser<Left, Right> operator>>(
 
 inline auto operator "" _lp(char literal)
 {
-  return [=](regex_param& param, regex_node_*& node){
+  return [=](regex_param& param, auto& node){
               if(param.regex.size() > param.consumed)
               {
                 if(param.regex[param.consumed] == literal)
@@ -98,7 +98,7 @@ inline auto operator "" _lp(char literal)
 
 inline auto operator "" _nlp(char literal)
 {
-  return [=](regex_param& param, regex_node_*& node){
+  return [=](regex_param& param, auto& node){
               if(param.regex.size() > param.consumed)
               {
                 if(param.regex[param.consumed] != literal)
@@ -116,7 +116,7 @@ struct alternative_parser
 {
   alternative_parser(Left left, Right right) : left_{left}, right_{right} {}
 
-  bool operator()(regex_param& param, regex_node_*& node) const
+  bool operator()(regex_param& param, auto& node) const
   {
     if(auto result = left_(param, node); result)
       return true;
@@ -138,7 +138,7 @@ inline alternative_parser<Left, Right> operator|(
 // ---- generator
 inline auto operator "" _lg(char literal)
 {
-  return [=](regex_param& param, regex_node_*& node){
+  return [=](regex_param& param, auto& node){
               node = new literal_regex_node_{literal};
               return true;
             };
@@ -197,7 +197,7 @@ bool parser_factor(regex_param& param, regex_node_*& node)
 
   bool ok = parser_base(param, node);
 
-  auto repeat_range_zero = '*'_lp >> [](regex_param& param, regex_node_*& node){
+  auto repeat_range_zero = '*'_lp >> [](regex_param& param, auto& node){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // must be perceeded by a character that is not an anchor
 
@@ -206,7 +206,7 @@ bool parser_factor(regex_param& param, regex_node_*& node)
 
           return true;
         };
-  auto repeat_range_one = '+'_lp >> [](regex_param& param, regex_node_*& node){
+  auto repeat_range_one = '+'_lp >> [](regex_param& param, auto& node){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // must be perceeded by a character that is not an anchor
 
@@ -217,7 +217,7 @@ bool parser_factor(regex_param& param, regex_node_*& node)
 
           return true;
         };
-  auto optional_item = '?'_lp >> [](regex_param& param, regex_node_*& node){
+  auto optional_item = '?'_lp >> [](regex_param& param, auto& node){
           if(param.consumed == 1 || (param.consumed == 2 && (param.regex[0] == '^' || param.regex[0] == '|')) || (param.regex[param.consumed - 1] == '|' && param.regex[param.consumed - 2] != '\\'))
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // must be perceeded by a character that is not an anchor
 
@@ -250,7 +250,7 @@ bool parser_factor(regex_param& param, regex_node_*& node)
   // {x[,y]}
   auto limited_repetition_parser =
        ('{'_lp
-          >> [digit_parser](regex_param& param, regex_node_*& node) {
+          >> [digit_parser](regex_param& param, auto& node) {
                 std::size_t num = 0;
                 if(param.consumed < param.regex.size())
                 {
@@ -281,7 +281,7 @@ bool parser_factor(regex_param& param, regex_node_*& node)
 
                 return true;
               } >> '}'_lp)
-    | [](regex_param& param, regex_node_*& node){return true;};
+    | [](regex_param& param, auto& node){return true;};
 
   return limited_repetition_parser(param, node);
 }
@@ -294,32 +294,32 @@ bool parser_base(regex_param& param, regex_node_*& node)
   auto carriage_return = 'r'_lp >> '\r'_lg;
   auto horizontal_tab = 't'_lp >> '\t'_lg;
   auto vertical_tab = 'v'_lp >> '\v'_lg;
-  auto any_digit = 'd'_lp >> [](regex_param& param, regex_node_*& node){
+  auto any_digit = 'd'_lp >> [](regex_param& param, auto& node){
         node = new range_random_regex_node_{'0', '9'};
         return true;
       };
   auto null_character = '0'_lp >> '\0'_lg;
-  auto any_non_digit = 'D'_lp >> [](regex_param& param, regex_node_*& node){
+  auto any_non_digit = 'D'_lp >> [](regex_param& param, auto& node){
         node = rand_regex::any_non_digit_node();
         return true;
       };
-  auto any_whitespace = 's'_lp >> [](regex_param& param, regex_node_*& node){
+  auto any_whitespace = 's'_lp >> [](regex_param& param, auto& node){
         node = new whitespace_regex_node_{};
         return true;
       };
-  auto any_non_whitespace = 'S'_lp >> [](regex_param& param, regex_node_*& node){
+  auto any_non_whitespace = 'S'_lp >> [](regex_param& param, auto& node){
         node = rand_regex::any_non_whitespace_node();
         return true;
       };
-  auto any_alphanum_or_underscore = 'w'_lp >> [](regex_param& param, regex_node_*& node){
+  auto any_alphanum_or_underscore = 'w'_lp >> [](regex_param& param, auto& node){
         node = rand_regex::any_alphanum_or_underscore_node();
         return true;
       };
-  auto any_not_alphanum_or_underscore = 'W'_lp >> [](regex_param& param, regex_node_*& node){
+  auto any_not_alphanum_or_underscore = 'W'_lp >> [](regex_param& param, auto& node){
         node = rand_regex::any_not_alphanum_or_underscore_node();
         return true;
       };
-  auto hexadecimal_ascii_character_representation = 'x'_lp >> [](regex_param& param, regex_node_*& node){ // \x00 to \x7F
+  auto hexadecimal_ascii_character_representation = 'x'_lp >> [](regex_param& param, auto& node){ // \x00 to \x7F
           if(param.regex.size() < param.consumed+2 || !::isxdigit((int)param.regex[param.consumed]) || !::isxdigit((int)param.regex[param.consumed+1]))
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // either regex ends too soon or the next two characters are not digits
 
@@ -335,7 +335,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
         };
 
   auto backreference_parser = ('1'_lp | '2'_lp | '3'_lp | '4'_lp | '5'_lp | '6'_lp | '7'_lp | '8'_lp | '9'_lp) >>
-        [](regex_param& param, regex_node_*& node){
+        [](regex_param& param, auto& node){
           std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed);
 
           int digit = std::stoi(std::string(param.regex.substr(param.consumed-1, end)));
@@ -385,8 +385,8 @@ bool parser_base(regex_param& param, regex_node_*& node)
       | escaped_regex_end_parser;
 
   auto escaped_or_literal =
-        ('\\'_lp >> [parser_escaped](regex_param& param, regex_node_*& node){return parser_escaped(param, node);})
-      | [](regex_param& param, regex_node_*& node){
+        ('\\'_lp >> [parser_escaped](regex_param& param, auto& node){return parser_escaped(param, node);})
+      | [](regex_param& param, auto& node){
             node = new literal_regex_node_(param.regex[param.consumed++]);
             return true;
           };
@@ -398,23 +398,23 @@ bool parser_base(regex_param& param, regex_node_*& node)
       | horizontal_tab
       | vertical_tab
       | hexadecimal_ascii_character_representation
-      | [](regex_param& param, regex_node_*& node){
+      | [](regex_param& param, auto& node){
             node = new literal_regex_node_(param.regex[param.consumed++]);
             return true;
           }; // escaped_literal_char (TODO should non valid escapes be removed? Throwing exception out of them...)
 
   auto end_range_escaped_or_literal =
-        ('\\'_lp >> [parse_end_range_escaped](regex_param& param, regex_node_*& node){
+        ('\\'_lp >> [parse_end_range_escaped](regex_param& param, auto& node){
             return parse_end_range_escaped(param, node);
           })
-      | [](regex_param& param, regex_node_*& node){
+      | [](regex_param& param, auto& node){
             node = new literal_regex_node_(param.regex[param.consumed++]);
             return true;
           };
 
   auto range_parser =
        ']'_nlp
-      >> [escaped_or_literal, end_range_escaped_or_literal](regex_param& param, regex_node_*& node)
+      >> [escaped_or_literal, end_range_escaped_or_literal](regex_param& param, auto& node)
           {
             if(!escaped_or_literal(param, node))
               throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
@@ -439,7 +439,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
           };
 
   auto range_or_negated_range =
-        ('^'_lp >> [range_parser](regex_param& param, regex_node_*& node){
+        ('^'_lp >> [range_parser](regex_param& param, auto& node){
           std::vector<regex_node_*> tmp;
           regex_node_* tmp_node;
           for(bool ok = range_parser(param, tmp_node); ok; ok = range_parser(param, tmp_node))
@@ -558,7 +558,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
           node = new or_regex_node_(std::move(invert));
           return true;
         })
-      | [range_parser](regex_param& param, regex_node_*& node){
+      | [range_parser](regex_param& param, auto& node){
           std::vector<regex_node_*> items;
           regex_node_* tmp_node;
           for(bool ok = range_parser(param, tmp_node); ok; ok = range_parser(param, tmp_node))
@@ -577,7 +577,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
           return true;
         };
 
-  auto empty_group_end = ')'_lp >> [](regex_param& param, regex_node_*& node){ // handle empty group
+  auto empty_group_end = ')'_lp >> [](regex_param& param, auto& node){ // handle empty group
                             node = new regex_node_(); // empty
                             return true;
                           };
@@ -587,18 +587,18 @@ bool parser_base(regex_param& param, regex_node_*& node)
             ( empty_group_end
               |
               ( // non capturing group
-                '?'_lp >> (':'_lp | [](regex_param& param, regex_node_*& node) -> bool {
+                '?'_lp >> (':'_lp | [](regex_param& param, auto& node) -> bool {
                                       throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // not enough characters
                                     }) >> (empty_group_end
                                       |
-                                      [](regex_param& param, regex_node_*& node){
+                                      [](regex_param& param, auto& node){
                                         bool ok = parser_regex(param, node);
                                         if(!ok || param.regex.size() == param.consumed)
                                           throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // missing closing bracket
                                         return true;
                                       } >> ')'_lp))
               |
-              [](regex_param& param, regex_node_*& node) // capture group
+              [](regex_param& param, auto& node) // capture group
               {
                 param.captured_groups.push_back(false);
                 int capture_index = param.captured_groups.size() - 1;
@@ -612,20 +612,20 @@ bool parser_base(regex_param& param, regex_node_*& node)
                 node = new inner_group_node_{tmp_node, capture_index};
                 return true;
               } >> ')'_lp))
-        | ('['_lp >> [range_or_negated_range](regex_param& param, regex_node_*& node){
+        | ('['_lp >> [range_or_negated_range](regex_param& param, auto& node){
               return range_or_negated_range(param, node);
             })
-        | ('\\'_lp >> [parser_escaped](regex_param& param, regex_node_*& node){
+        | ('\\'_lp >> [parser_escaped](regex_param& param, auto& node){
             if(!parser_escaped(param, node))
               throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // FIXME add more returned nullptr handling...
 
             return true;
           }) // FIXME nullptr return handling...
-        | ('.'_lp >> [](regex_param& param, regex_node_*& node){
+        | ('.'_lp >> [](regex_param& param, auto& node){
               node = rand_regex::dot_node();
               return true;
             })
-        | [](regex_param& param, regex_node_*& node){
+        | [](regex_param& param, auto& node){
             if(param.regex[param.consumed] == '$' || param.regex[param.consumed] == '^')
               throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unsupported regex items
 
