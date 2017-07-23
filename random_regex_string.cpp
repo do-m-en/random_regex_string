@@ -291,6 +291,11 @@ bool parser_base(regex_param& param, regex_node_*& node)
           throw std::runtime_error("Regex error at " + std::to_string(param.consumed));
         };
 
+  auto lit_gen = [](regex_param& param, auto& node){
+          node = new literal_regex_node_(param.regex[param.consumed++]);
+          return true;
+        };
+
   auto form_feed = 'f'_lp >> '\f'_lg;
   auto new_line = 'n'_lp >> '\n'_lg;
   auto carriage_return = 'r'_lp >> '\r'_lg;
@@ -393,10 +398,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
 
   auto escaped_or_literal =
         parser_escaped
-      | [](regex_param& param, auto& node){
-            node = new literal_regex_node_(param.regex[param.consumed++]);
-            return true;
-          };
+      | lit_gen;
 
   auto parse_end_range_escaped =
         '\\'_lp
@@ -423,10 +425,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
 
   auto end_range_escaped_or_literal =
         parse_end_range_escaped
-      | [](regex_param& param, auto& node){
-            node = new literal_regex_node_(param.regex[param.consumed++]);
-            return true;
-          };
+      | lit_gen;
 
   auto range_parser =
        ']'_nlp
@@ -635,11 +634,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
               return true;
             })
         | (('$'_lp | '^'_lp) >> terminate) // unsupported regex items - '$' end of string and '^' start of string regex items are not supported for now
-        |
-          [](regex_param& param, auto& node){ // the rest of the items are treated as literals
-            node = new literal_regex_node_(param.regex[param.consumed++]);
-            return true;
-          };
+        | lit_gen; // the rest of the items are treated as literals
 
   return parser_base_type(param, node);
 }
