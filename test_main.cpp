@@ -361,142 +361,149 @@ namespace {
   }
 }
 
-int main()
+int main(int args, char** argv)
 {
   try
   {
-    test_regex_ECMAScript("a");
-    test_regex_ECMAScript("ab");
-    test_regex_ECMAScript("a|f");
-    test_regex_ECMAScript("a|f|g");
-    test_regex_ECMAScript("ab|f|g");
-    test_regex_ECMAScript("a|fe|g");
-    test_regex_ECMAScript("a|f|gh");
-    test_regex_ECMAScript("ab|fe|gh");
+    int end = (args == 1 ? 1 : 100);
 
-    test_regex_ECMAScript("()");
-    test_regex_ECMAScript("(a)");
+    for(int i = 0; i < end; ++i)
+    {
+      test_regex_ECMAScript("a");
+      test_regex_ECMAScript("ab");
+      test_regex_ECMAScript("a|f");
+      test_regex_ECMAScript("a|f|g");
+      test_regex_ECMAScript("ab|f|g");
+      test_regex_ECMAScript("a|fe|g");
+      test_regex_ECMAScript("a|f|gh");
+      test_regex_ECMAScript("ab|fe|gh");
 
-    test_regex_ECMAScript("[a]");
-    test_regex_ECMAScript("[a-b]");
-    test_regex_ECMAScript("[a-b1]");
-    test_regex_ECMAScript("[a-b1-9]");
-    test_regex_ECMAScript("[0-9A-Z]{5}");
-    test_regex_ECMAScript("[abd-x---0-9--]*");
+      test_regex_ECMAScript("()");
+      test_regex_ECMAScript("(a)");
 
-    test_regex_ECMAScript("a*");
+      test_regex_ECMAScript("[^]");
+      test_regex_ECMAScript("[a]");
+      test_regex_ECMAScript("[a-b]");
+      test_regex_ECMAScript("[a-b1]");
+      test_regex_ECMAScript("[a-b1-9]");
+      test_regex_ECMAScript("[0-9A-Z]{5}");
+      test_regex_ECMAScript("[abd-x---0-9--]*");
 
-    test_regex_ECMAScript("a{3,6}");
-    test_regex_ECMAScript("a{3}");
-    test_regex_ECMAScript("a{3,}");
-    test_regex_ECMAScript("(ab)|(cde)|(fg(hi|(jk)))a");
-    test_regex_ECMAScript("(ab)*|(cde)|(fg(hi|(jk)))a");
-    test_regex_ECMAScript("ab?c?");
-    test_regex_ECMAScript("a??b");
-    test_regex_ECMAScript("ab\\?c\\\\\\?");
-    test_regex_ECMAScript("(ab){2}(cd){3,5}");
-    test_regex_ECMAScript("(ab){2}(cd){3,5}e{2,}");
-    test_regex_ECMAScript("[a-c][abd][a-bcd-e0-8][---][--][-a-]");
-    test_regex_ECMAScript("[0-9]{3}-\\s[0-9]{2}-[0-9]{4}");
-    test_regex_ECMAScript("a\\nb");
-    test_regex_ECMAScript("\\D");
-    test_regex_ECMAScript("\\^*");
-    test_regex_ECMAScript("[\\^]*");
-    test_regex_ECMAScript("\\x65");
+      test_regex_ECMAScript("a*");
 
-    test_regex_ECMAScript("\\f\\{");
-    test_regex_ECMAScript("\\d+_\\D+");
-    test_regex_ECMAScript("\\s+_\\S+");
-    test_regex_ECMAScript("\\w+_\\W+");
-    test_regex_ECMAScript("[a-]]");
+      test_regex_ECMAScript("a{3,6}");
+      test_regex_ECMAScript("a{3}");
+      test_regex_ECMAScript("a{3,}");
+      test_regex_ECMAScript("(ab)|(cde)|(fg(hi|(jk)))a");
+      test_regex_ECMAScript("(ab)*|(cde)|(fg(hi|(jk)))a");
+      test_regex_ECMAScript("ab?c?");
+      test_regex_ECMAScript("a??b");
+      test_regex_ECMAScript("ab\\?c\\\\\\?");
+      test_regex_ECMAScript("(ab){2}(cd){3,5}");
+      test_regex_ECMAScript("(ab){2}(cd){3,5}e{2,}");
+      test_regex_ECMAScript("[a-c][abd][a-bcd-e0-8][---][--][-a-]");
+      test_regex_ECMAScript("[0-9]{3}-\\s[0-9]{2}-[0-9]{4}");
+      test_regex_ECMAScript("a\\nb");
+      test_regex_ECMAScript("\\D");
+      test_regex_ECMAScript("\\^*");
+      test_regex_ECMAScript("[\\^]*");
+      test_regex_ECMAScript("\\x65");
 
-    test_regex_ECMAScript("gbc.*");
-    test_regex_ECMAScript("\\^*");
-    test_regex_ECMAScript("[\\^]*");
-    test_regex_ECMAScript("[\\n-\\^]*");
-    test_regex_ECMAScript("[^a]*");
-    test_regex_ECMAScript("[^a-c]*");
-    test_regex_ECMAScript("[^a-z0-9x]*");
-    test_regex_ECMAScript("[^b-cd-eg-mh-ij-ls-vr-t]*");
+      test_regex_ECMAScript("\\f\\{");
+      test_regex_ECMAScript("\\d+_\\D+");
+      test_regex_ECMAScript("\\s+_\\S+");
+      test_regex_ECMAScript("\\w+_\\W+");
+      test_regex_ECMAScript("[a-]]");
 
-    test_regex_ECMAScript("\\^");
-    test_regex_ECMAScript("\\^ sdfasdfa");
-    test_regex_ECMAScript("\\$");
-    test_regex_ECMAScript("(\\$)");
-    test_regex_ECMAScript("\\^\\$");
-    test_regex_ECMAScript("\\$|a");
-    test_regex_ECMAScript("(\\$)|a");
-    test_regex_ECMAScript("(\\$|ab)|a");
-    test_regex_ECMAScript("((a\\$)|ab)|a");
-    test_regex_ECMAScript("\\^abc\\$|\\^b\\$");
-    test_regex_ECMAScript("(\\^a|(\\^b))bc\\$|\\^b\\$");
+      test_regex_ECMAScript("gbc.*");
+      test_regex_ECMAScript("\\^*");
+      test_regex_ECMAScript("[\\^]*");
+      test_regex_ECMAScript("[\\n-\\^]*");
+      test_regex_ECMAScript("[^a]*");
+      test_regex_ECMAScript("[^a-c]*");
+      test_regex_ECMAScript("[^a-z0-9x]*");
+      test_regex_ECMAScript("[^b-cd-eg-mh-ij-ls-vr-t]*");
 
-    test_regex_ECMAScript("\\x61");
-    test_regex_ECMAScript(".U");
-    test_regex_ECMAScript("(abc)(def)(ghi)(jkl)(mno)(pqr)(stu)(abc1)(def1)(ghi1)(jkl1)(abc|mno1)\\12");
-    test_regex_ECMAScript("(abc)(def)(ghi)(jkl)(mno)(pqr)(stu)(abc1)(def1)(ghi1(|abc|mno1))(jkl1)\\11"); // TODO empty or is not handled
-    test_regex_ECMAScript("(abc)(def)(?:ghi)(jkl)\\3");
-    test_regex_ECMAScript("(abc)(def)(?:ghi|xyz)(jkl)\\3");
-    test_regex_ECMAScript("\\0");
-    test_regex_ECMAScript("a\\0b");
-    test_regex_ECMAScript("a|");
-    test_regex_ECMAScript("|");
-    test_regex_ECMAScript("a||b");
-    test_regex_ECMAScript("|b");
+      test_regex_ECMAScript("\\^");
+      test_regex_ECMAScript("\\^ sdfasdfa");
+      test_regex_ECMAScript("\\$");
+      test_regex_ECMAScript("(\\$)");
+      test_regex_ECMAScript("\\^\\$");
+      test_regex_ECMAScript("\\$|a");
+      test_regex_ECMAScript("(\\$)|a");
+      test_regex_ECMAScript("(\\$|ab)|a");
+      test_regex_ECMAScript("((a\\$)|ab)|a");
+      test_regex_ECMAScript("\\^abc\\$|\\^b\\$");
+      test_regex_ECMAScript("(\\^a|(\\^b))bc\\$|\\^b\\$");
 
-/* TODO as far as I understand \0 is not allowed to be followed by a decimal digit so why does this work???
-    test_regex_ECMAScript("a\\01");
-    test_regex_ECMAScript("a\\00");
-*/
-    test_regex_ECMAScript("()");
-    test_regex_ECMAScript("(?:)");
-    test_regex_ECMAScript("(?:abc)");
-    test_regex_ECMAScript("(?:abc|def)");
+      test_regex_ECMAScript("\\x61");
+      test_regex_ECMAScript(".U");
+      test_regex_ECMAScript("(abc)(def)(ghi)(jkl)(mno)(pqr)(stu)(abc1)(def1)(ghi1)(jkl1)(abc|mno1)\\12");
+      test_regex_ECMAScript("(abc)(def)(ghi)(jkl)(mno)(pqr)(stu)(abc1)(def1)(ghi1(|abc|mno1))(jkl1)\\11"); // TODO empty or is not handled
+      test_regex_ECMAScript("(abc)(def)(?:ghi)(jkl)\\3");
+      test_regex_ECMAScript("(abc)(def)(?:ghi|xyz)(jkl)\\3");
+      test_regex_ECMAScript("\\0");
+      test_regex_ECMAScript("a\\0b");
+      test_regex_ECMAScript("a|");
+      test_regex_ECMAScript("|");
+      test_regex_ECMAScript("a||b");
+      test_regex_ECMAScript("|b");
 
-    //test_regex_ECMAScript("d[conv[22]]syMs\=[conv[31]][conv[26]][conv[0]][conv[30]]z[conv[27]]KR=n/mdpZzd96j[conv[4]]LVgJ"ykXp[conv[17]][conv[3]][conv[21]][conv[5]]gKl[conv[8]]7[conv[1]][conv[20]][conv[11]]chcJ@");
+  /* TODO as far as I understand \0 is not allowed to be followed by a decimal digit so why does this work???
+      test_regex_ECMAScript("a\\01");
+      test_regex_ECMAScript("a\\00");
+  */
+      test_regex_ECMAScript("()");
+      test_regex_ECMAScript("(?:)");
+      test_regex_ECMAScript("(?:abc)");
+      test_regex_ECMAScript("(?:abc|def)");
 
-    // negative tests
-    test_negative_regex_ECMAScript("a\\ba");
-    test_negative_regex_ECMAScript("gbc.**");
-    test_negative_regex_ECMAScript("gbc++(cd)");
-    test_negative_regex_ECMAScript("gbc.*+abc");
-    test_negative_regex_ECMAScript("(abc)*+abc");
-    test_negative_regex_ECMAScript("a|f|gbc.*+abc");
-    test_negative_regex_ECMAScript("a???b");
-    test_negative_regex_ECMAScript("((a$)|ab)c|a");
-    test_negative_regex_ECMAScript("a\\bc");
-    test_negative_regex_ECMAScript("a\\B c");
-    test_negative_regex_ECMAScript("a?*");
-    test_negative_regex_ECMAScript("$1");
-    test_negative_regex_ECMAScript("1^");
+      //test_regex_ECMAScript("d[conv[22]]syMs\=[conv[31]][conv[26]][conv[0]][conv[30]]z[conv[27]]KR=n/mdpZzd96j[conv[4]]LVgJ"ykXp[conv[17]][conv[3]][conv[21]][conv[5]]gKl[conv[8]]7[conv[1]][conv[20]][conv[11]]chcJ@");
 
-    test_negative_regex_ECMAScript("\\u1234");
-    test_invalid_regex_ECMAScript("\\u1234");
+      // negative tests
+      test_negative_regex_ECMAScript("[]");
+      test_negative_regex_ECMAScript("a\\ba");
+      test_negative_regex_ECMAScript("gbc.**");
+      test_negative_regex_ECMAScript("gbc++(cd)");
+      test_negative_regex_ECMAScript("gbc.*+abc");
+      test_negative_regex_ECMAScript("(abc)*+abc");
+      test_negative_regex_ECMAScript("a|f|gbc.*+abc");
+      test_negative_regex_ECMAScript("a???b");
+      test_negative_regex_ECMAScript("((a$)|ab)c|a");
+      test_negative_regex_ECMAScript("a\\bc");
+      test_negative_regex_ECMAScript("a\\B c");
+      test_negative_regex_ECMAScript("a?*");
+      test_negative_regex_ECMAScript("$1");
+      test_negative_regex_ECMAScript("1^");
 
-    // negative in C++ regex but working in online regex tester as literal text
-    test_unsupported_regex_ECMAScript("a*{,3}");
-    test_unsupported_regex_ECMAScript("a*{a,3}");
-    test_unsupported_regex_ECMAScript("a*{ 1,3}");
+      test_negative_regex_ECMAScript("\\u1234");
+      test_invalid_regex_ECMAScript("\\u1234");
 
-    // word boundary regex is not supported as we'd have to support too many cases
-    test_unsupported_regex_ECMAScript("a\\Bb");
-    test_unsupported_regex_ECMAScript("a \\bb");
-    // start and end of text marker are not supported as we want to controll the generation of the entire
-    // string anyway so anyone wanting to generate don't-care front and back can use something like
-    // .{10,1000}
-    test_unsupported_regex_ECMAScript("^");
-    test_unsupported_regex_ECMAScript("^ sdfasdfa");
-    test_unsupported_regex_ECMAScript("$");
-    test_unsupported_regex_ECMAScript("($)");
-    test_unsupported_regex_ECMAScript("^$");
-    test_unsupported_regex_ECMAScript("$|a");
-    test_unsupported_regex_ECMAScript("($)|a");
-    test_unsupported_regex_ECMAScript("($|ab)|a");
-    test_unsupported_regex_ECMAScript("((a$)|ab)|a");
-    test_unsupported_regex_ECMAScript("^abc$|^b$");
-    test_unsupported_regex_ECMAScript("(^a|(^b))bc$|^b$");
-    test_unsupported_regex_ECMAScript("\\p");
-    test_unsupported_regex_ECMAScript("(\\a)");
+      // negative in C++ regex but working in online regex tester as literal text
+      test_unsupported_regex_ECMAScript("a*{,3}");
+      test_unsupported_regex_ECMAScript("a*{a,3}");
+      test_unsupported_regex_ECMAScript("a*{ 1,3}");
+
+      // word boundary regex is not supported as we'd have to support too many cases
+      test_unsupported_regex_ECMAScript("a\\Bb");
+      test_unsupported_regex_ECMAScript("a \\bb");
+      // start and end of text marker are not supported as we want to controll the generation of the entire
+      // string anyway so anyone wanting to generate don't-care front and back can use something like
+      // .{10,1000}
+      test_unsupported_regex_ECMAScript("^");
+      test_unsupported_regex_ECMAScript("^ sdfasdfa");
+      test_unsupported_regex_ECMAScript("$");
+      test_unsupported_regex_ECMAScript("($)");
+      test_unsupported_regex_ECMAScript("^$");
+      test_unsupported_regex_ECMAScript("$|a");
+      test_unsupported_regex_ECMAScript("($)|a");
+      test_unsupported_regex_ECMAScript("($|ab)|a");
+      test_unsupported_regex_ECMAScript("((a$)|ab)|a");
+      test_unsupported_regex_ECMAScript("^abc$|^b$");
+      test_unsupported_regex_ECMAScript("(^a|(^b))bc$|^b$");
+      test_unsupported_regex_ECMAScript("\\p");
+      test_unsupported_regex_ECMAScript("(\\a)");
+    }
 
     // TODO add negative cases... TODO also check if they realy are invalid
     // []

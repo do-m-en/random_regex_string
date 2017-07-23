@@ -287,6 +287,10 @@ bool parser_factor(regex_param& param, regex_node_*& node)
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
 bool parser_base(regex_param& param, regex_node_*& node)
 {
+  auto terminate = [](regex_param& param, auto& node) -> regex_node_* {
+          throw std::runtime_error("Regex error at " + std::to_string(param.consumed));
+        };
+
   auto form_feed = 'f'_lp >> '\f'_lg;
   auto new_line = 'n'_lp >> '\n'_lg;
   auto carriage_return = 'r'_lp >> '\r'_lg;
@@ -356,55 +360,69 @@ bool parser_base(regex_param& param, regex_node_*& node)
   auto escaped_regex_start_parser = '^'_lp >> '^'_lg;
   auto escaped_regex_end_parser = '$'_lp >> '$'_lg;
 
-  auto parser_escaped = 
-        form_feed
-      | new_line
-      | carriage_return
-      | horizontal_tab
-      | vertical_tab
-      | any_digit
-      | any_non_digit
-      | any_whitespace
-      | any_non_whitespace
-      | any_alphanum_or_underscore
-      | any_not_alphanum_or_underscore
-      | hexadecimal_ascii_character_representation
-      | null_character
-      | backreference_parser
+  auto parser_escaped =
+        '\\'_lp
+        >>
+        (
+            form_feed
+          | new_line
+          | carriage_return
+          | horizontal_tab
+          | vertical_tab
+          | any_digit
+          | any_non_digit
+          | any_whitespace
+          | any_non_whitespace
+          | any_alphanum_or_underscore
+          | any_not_alphanum_or_underscore
+          | hexadecimal_ascii_character_representation
+          | null_character
+          | backreference_parser
 
-      // escaped special chars
-      | escaped_escape_parser
-      | escaped_optional_parser
-      | escaped_repeat_zero_parser
-      | escaped_repeat_one_parser
-      | escaped_repeat_parser
-      | escaped_group_parser
-      | escaped_regex_start_parser
-      | escaped_regex_end_parser;
+          // escaped special chars
+          | escaped_escape_parser
+          | escaped_optional_parser
+          | escaped_repeat_zero_parser
+          | escaped_repeat_one_parser
+          | escaped_repeat_parser
+          | escaped_group_parser
+          | escaped_regex_start_parser
+          | escaped_regex_end_parser
+
+          | terminate);
 
   auto escaped_or_literal =
-        ('\\'_lp >> [parser_escaped](regex_param& param, auto& node){return parser_escaped(param, node);})
+        parser_escaped
       | [](regex_param& param, auto& node){
             node = new literal_regex_node_(param.regex[param.consumed++]);
             return true;
           };
 
   auto parse_end_range_escaped =
-        form_feed
-      | new_line
-      | carriage_return
-      | horizontal_tab
-      | vertical_tab
-      | hexadecimal_ascii_character_representation
-      | [](regex_param& param, auto& node){
-            node = new literal_regex_node_(param.regex[param.consumed++]);
-            return true;
-          }; // escaped_literal_char (TODO should non valid escapes be removed? Throwing exception out of them...)
+        '\\'_lp
+      >>
+      (
+          form_feed
+        | new_line
+        | carriage_return
+        | horizontal_tab
+        | vertical_tab
+        | hexadecimal_ascii_character_representation
+
+        // escaped special chars
+        | escaped_escape_parser
+        | escaped_optional_parser
+        | escaped_repeat_zero_parser
+        | escaped_repeat_one_parser
+        | escaped_repeat_parser
+        | escaped_group_parser
+        | escaped_regex_start_parser
+        | escaped_regex_end_parser
+
+        | terminate);
 
   auto end_range_escaped_or_literal =
-        ('\\'_lp >> [parse_end_range_escaped](regex_param& param, auto& node){
-            return parse_end_range_escaped(param, node);
-          })
+        parse_end_range_escaped
       | [](regex_param& param, auto& node){
             node = new literal_regex_node_(param.regex[param.consumed++]);
             return true;
@@ -437,18 +455,20 @@ bool parser_base(regex_param& param, regex_node_*& node)
           };
 
   auto range_or_negated_range =
-        ('^'_lp >> [range_parser](regex_param& param, auto& node){
+        '['_lp >>
+        (((('^'_lp >> [range_parser](regex_param& param, auto& node){
           std::vector<regex_node_*> tmp;
           regex_node_* tmp_node;
           for(bool ok = range_parser(param, tmp_node); ok; ok = range_parser(param, tmp_node))
           {
             tmp.push_back(tmp_node);
           }
-          // TODO check if range parser returns an empty vector
 
-          if(param.regex[param.consumed] != ']') // TODO delete nodes before this point
-            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // terminator not found*/
-          ++param.consumed;
+          if(tmp.empty())
+          {
+            node = new range_random_regex_node_(ascii_min, ascii_max); // any character
+            return true;
+          }
 
           std::vector<regex_node_*> invert;
           std::vector<std::pair<char, char>> ranges;
@@ -556,7 +576,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
           node = new or_regex_node_(std::move(invert));
           return true;
         })
-      | [range_parser](regex_param& param, auto& node){
+      | ([range_parser](regex_param& param, auto& node){
           std::vector<regex_node_*> items;
           regex_node_* tmp_node;
           for(bool ok = range_parser(param, tmp_node); ok; ok = range_parser(param, tmp_node))
@@ -564,16 +584,13 @@ bool parser_base(regex_param& param, regex_node_*& node)
             items.push_back(tmp_node);
           }
 
-          if(items.empty())
-            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // terminator not found*/
+          if(!items.empty())
+            node = new or_regex_node_(std::move(items));
+          else
+            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // [] always fails so it's invalid for a generator
 
-          if(param.regex[param.consumed] != ']') // TODO delete nodes before this point
-            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // terminator not found*/
-          ++param.consumed;
-
-          node = new or_regex_node_(std::move(items));
           return true;
-        };
+        })) >> ']'_lp) | terminate);
 
   auto empty_group_end = ')'_lp >> [](regex_param& param, auto& node){ // handle empty group
                             node = new regex_node_(); // empty
@@ -587,14 +604,15 @@ bool parser_base(regex_param& param, regex_node_*& node)
               ( // non capturing group
                 '?'_lp >> (':'_lp | [](regex_param& param, auto& node) -> bool {
                                       throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // not enough characters
-                                    }) >> (empty_group_end
+                                    }) >>
+                                    (
+                                      empty_group_end
                                       |
-                                      [](regex_param& param, auto& node){
-                                        bool ok = parser_regex(param, node);
-                                        if(!ok || param.regex.size() == param.consumed)
-                                          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // missing closing bracket
-                                        return true;
-                                      } >> ')'_lp))
+                                      ([](regex_param& param, auto& node){
+                                        return parser_regex(param, node);
+                                      } >> ')'_lp)
+                                      | terminate)
+                                    )
               |
               [](regex_param& param, auto& node) // capture group
               {
@@ -610,23 +628,15 @@ bool parser_base(regex_param& param, regex_node_*& node)
                 node = new inner_group_node_{tmp_node, capture_index};
                 return true;
               } >> ')'_lp))
-        | ('['_lp >> [range_or_negated_range](regex_param& param, auto& node){
-              return range_or_negated_range(param, node);
-            })
-        | ('\\'_lp >> [parser_escaped](regex_param& param, auto& node){
-            if(!parser_escaped(param, node))
-              throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // FIXME add more returned nullptr handling...
-
-            return true;
-          }) // FIXME nullptr return handling...
+        | range_or_negated_range
+        | parser_escaped
         | ('.'_lp >> [](regex_param& param, auto& node){
               node = rand_regex::dot_node();
               return true;
             })
-        | [](regex_param& param, auto& node){
-            if(param.regex[param.consumed] == '$' || param.regex[param.consumed] == '^')
-              throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unsupported regex items
-
+        | (('$'_lp | '^'_lp) >> terminate) // unsupported regex items - '$' end of string and '^' start of string regex items are not supported for now
+        |
+          [](regex_param& param, auto& node){ // the rest of the items are treated as literals
             node = new literal_regex_node_(param.regex[param.consumed++]);
             return true;
           };
