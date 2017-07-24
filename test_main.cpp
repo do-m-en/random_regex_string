@@ -462,6 +462,7 @@ int main(int args, char** argv)
 
       // negative tests
       test_negative_regex_ECMAScript("[]");
+      test_negative_regex_ECMAScript("[]a]"); // valid in for e.g. php but not valid for ECMAScript
       test_negative_regex_ECMAScript("a\\ba");
       test_negative_regex_ECMAScript("gbc.**");
       test_negative_regex_ECMAScript("gbc++(cd)");
