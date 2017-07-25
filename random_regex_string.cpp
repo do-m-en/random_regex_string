@@ -133,12 +133,12 @@ inline auto operator "" _lg(char literal) // literal generator
 }
 // ---- generator end
 
-bool parser_base(regex_param& param, regex_node_*& node);
+bool parser_base(regex_param& param, auto& node);
 
 
 
 // <factor> ::= <base> { '*' } | <base> { '+' } | <base> { '?' } | <base> { '{}' }
-auto parser_factor = [](regex_param& param, regex_node_*& node)
+auto parser_factor = [](regex_param& param, auto& node)
 {
   if(param.regex.size() == param.consumed)
   {
@@ -252,7 +252,7 @@ auto term = [](regex_param& param, auto& node) {
   };
 
 // <regex> ::= <term> '|' <regex> | <term>
-auto parser_regex = rec([](auto&& self, regex_param& param, regex_node_*& node) -> bool
+auto parser_regex = rec([](auto&& self, regex_param& param, auto& node) -> bool
 {
   if(param.regex[param.consumed] == '|')
   {
@@ -273,7 +273,7 @@ auto parser_regex = rec([](auto&& self, regex_param& param, regex_node_*& node) 
 });
 
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
-bool parser_base(regex_param& param, regex_node_*& node)
+bool parser_base(regex_param& param, auto& node)
 {
   /* terminator */
   auto terminate = [](regex_param& param, auto& node) -> bool {
