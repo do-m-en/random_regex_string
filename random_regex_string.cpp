@@ -113,6 +113,16 @@ inline auto operator|(const Left& left, const Right& right) // alternative_parse
             };
 }
 
+template<typename Right>
+inline auto operator-(const Right& right) // optional_parser
+{
+  return [=](regex_param& param, auto& node) {
+               right(param, node);
+
+               return true;
+            };
+}
+
 // ---- generator
 inline auto operator "" _lg(char literal) // literal generator
 {
@@ -123,47 +133,12 @@ inline auto operator "" _lg(char literal) // literal generator
 }
 // ---- generator end
 
-bool parser_factor(regex_param& param, regex_node_*& node);
 bool parser_base(regex_param& param, regex_node_*& node);
 
-// <regex> ::= <term> '|' <regex> | <term>
-auto parser_regex = rec([](auto&& self, regex_param& param, regex_node_*& node) -> bool
-{
-  if(param.regex[param.consumed] == '|')
-  {
-    ++param.consumed;
-  }
 
-  // <term> ::= { <factor> }
-  auto term = [](regex_param& param, auto& node) {
-      bool ok = parser_factor(param, node);
-
-      while(ok && param.consumed < param.regex.size() && param.regex[param.consumed] != ')'
-        && param.regex[param.consumed] != '|')
-      {
-        regex_node_* next = nullptr;
-        ok = parser_factor(param, next);
-        node = new group_regex_node_(std::vector<regex_node_*>{node, next}); // TODO consider renaming it to sequence
-      }
-
-      return ok;
-    };
-
-  bool ok = term(param, node);
-
-  if(ok && param.consumed < param.regex.size() && param.regex[param.consumed] == '|')
-  {
-    ++param.consumed; // consume |
-    regex_node_* other = nullptr;
-    ok = self(self, param, other);
-    node = new or_regex_node_{node, other};
-  }
-
-  return ok;
-});
 
 // <factor> ::= <base> { '*' } | <base> { '+' } | <base> { '?' } | <base> { '{}' }
-bool parser_factor(regex_param& param, regex_node_*& node)
+auto parser_factor = [](regex_param& param, regex_node_*& node)
 {
   if(param.regex.size() == param.consumed)
   {
@@ -225,7 +200,7 @@ bool parser_factor(regex_param& param, regex_node_*& node)
 
   // {x[,y]}
   auto limited_repetition_parser =
-       ('{'_lp
+       -('{'_lp
           >> [digit_parser](regex_param& param, auto& node) {
                 std::size_t num = 0;
                 if(param.consumed < param.regex.size())
@@ -256,11 +231,46 @@ bool parser_factor(regex_param& param, regex_node_*& node)
                   throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unexpected character found
 
                 return true;
-              } >> '}'_lp)
-    | [](regex_param& param, auto& node){return true;};
+              } >> '}'_lp);
 
   return limited_repetition_parser(param, node);
-}
+};
+
+// <term> ::= { <factor> }
+auto term = [](regex_param& param, auto& node) {
+    bool ok = parser_factor(param, node);
+
+    while(ok && param.consumed < param.regex.size() && param.regex[param.consumed] != ')'
+      && param.regex[param.consumed] != '|')
+    {
+      regex_node_* next = nullptr;
+      ok = parser_factor(param, next);
+      node = new group_regex_node_(std::vector<regex_node_*>{node, next}); // TODO consider renaming it to sequence
+    }
+
+    return ok;
+  };
+
+// <regex> ::= <term> '|' <regex> | <term>
+auto parser_regex = rec([](auto&& self, regex_param& param, regex_node_*& node) -> bool
+{
+  if(param.regex[param.consumed] == '|')
+  {
+    ++param.consumed;
+  }
+
+  bool ok = term(param, node);
+
+  if(ok && param.consumed < param.regex.size() && param.regex[param.consumed] == '|')
+  {
+    ++param.consumed; // consume |
+    regex_node_* other = nullptr;
+    ok = self(self, param, other);
+    node = new or_regex_node_{node, other};
+  }
+
+  return ok;
+});
 
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
 bool parser_base(regex_param& param, regex_node_*& node)
