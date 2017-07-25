@@ -41,47 +41,38 @@ using rand_regex::inner_group_node_;
 constexpr char ascii_min = 0;
 constexpr char ascii_max = 127;
 
-struct regex_param
-{
-  regex_param(std::string_view regex_) : regex{regex_} {}
-
-  std::string_view regex;
-  std::size_t consumed = 0;
-  std::vector<bool> captured_groups;
-};
-
 // class regex_template
 using rand_regex::regex_template;
 
-template<typename Left, typename Right>
-struct sequence_parser
-{
-  sequence_parser(Left left, Right right) : left_{left}, right_{right} {}
+template<typename Functor>
+struct recurse_type {
+    Functor functor;
 
-  bool operator()(regex_param& param, auto& node) const
-  {
-    if(auto result = left_(param, node); result)
-    {
-      return right_(param, node);
-    }
-
-    return false;
-  }
-
-  Left left_;
-  Right right_;
+    template<typename... Args>
+    decltype(auto) operator()(Args&&... args) const&
+    { return functor(functor, std::forward<Args>(args)...); }
 };
+template<typename Functor>
+recurse_type<typename std::decay<Functor>::type> rec(Functor&& functor)
+{ return { std::forward<Functor>(functor) }; }
+
 
 template<typename Left, typename Right>
-inline sequence_parser<Left, Right> operator>>(
-  const Left& left, const Right& right)
+inline auto operator>>(const Left& left, const Right& right) // sequence parser
 {
-  return sequence_parser<Left, Right>{left, right};
+  return [=](regex_param& param, auto& node) {
+              if(auto result = left(param, node); result)
+              {
+                return right(param, node);
+              }
+
+              return false;
+            };
 }
 
-inline auto operator "" _lp(char literal)
+inline auto operator "" _lp(char literal) // literal parser
 {
-  return [=](regex_param& param, auto& node){
+  return [&](regex_param& param, auto& node){
               if(param.regex.size() > param.consumed)
               {
                 if(param.regex[param.consumed] == literal)
@@ -96,9 +87,9 @@ inline auto operator "" _lp(char literal)
             };
 }
 
-inline auto operator "" _nlp(char literal)
+inline auto operator "" _nlp(char literal) // negated literal parser
 {
-  return [=](regex_param& param, auto& node){
+  return [&](regex_param& param, auto& node){
               if(param.regex.size() > param.consumed)
               {
                 if(param.regex[param.consumed] != literal)
@@ -112,33 +103,20 @@ inline auto operator "" _nlp(char literal)
 }
 
 template<typename Left, typename Right>
-struct alternative_parser
+inline auto operator|(const Left& left, const Right& right) // alternative_parser
 {
-  alternative_parser(Left left, Right right) : left_{left}, right_{right} {}
+  return [=](regex_param& param, auto& node) {
+              if(auto result = left(param, node); result)
+                return true;
 
-  bool operator()(regex_param& param, auto& node) const
-  {
-    if(auto result = left_(param, node); result)
-      return true;
-
-    return right_(param, node);
-  }
-
-  Left left_;
-  Right right_;
-};
-
-template<typename Left, typename Right>
-inline alternative_parser<Left, Right> operator|(
-  const Left& left, const Right& right)
-{
-  return alternative_parser<Left, Right>{left, right};
+              return right(param, node);
+            };
 }
 
 // ---- generator
-inline auto operator "" _lg(char literal)
+inline auto operator "" _lg(char literal) // literal generator
 {
-  return [=](regex_param& param, auto& node){
+  return [&](regex_param& param, auto& node){
               node = new literal_regex_node_{literal};
               return true;
             };
@@ -149,7 +127,7 @@ bool parser_factor(regex_param& param, regex_node_*& node);
 bool parser_base(regex_param& param, regex_node_*& node);
 
 // <regex> ::= <term> '|' <regex> | <term>
-bool parser_regex(regex_param& param, regex_node_*& node)
+auto parser_regex = rec([](auto&& self, regex_param& param, regex_node_*& node) -> bool
 {
   if(param.regex[param.consumed] == '|')
   {
@@ -177,12 +155,12 @@ bool parser_regex(regex_param& param, regex_node_*& node)
   {
     ++param.consumed; // consume |
     regex_node_* other = nullptr;
-    ok = parser_regex(param, other);
+    ok = self(self, param, other);
     node = new or_regex_node_{node, other};
   }
 
   return ok;
-}
+});
 
 // <factor> ::= <base> { '*' } | <base> { '+' } | <base> { '?' } | <base> { '{}' }
 bool parser_factor(regex_param& param, regex_node_*& node)
@@ -287,14 +265,18 @@ bool parser_factor(regex_param& param, regex_node_*& node)
 // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
 bool parser_base(regex_param& param, regex_node_*& node)
 {
-  auto terminate = [](regex_param& param, auto& node) -> regex_node_* {
+  /* terminator */
+  auto terminate = [](regex_param& param, auto& node) -> bool {
           throw std::runtime_error("Regex error at " + std::to_string(param.consumed));
         };
+  /* terminator end */
 
+  /* generators */
   auto lit_gen = [](regex_param& param, auto& node){
           node = new literal_regex_node_(param.regex[param.consumed++]);
           return true;
         };
+  /* generators end */
 
   auto form_feed = 'f'_lp >> '\f'_lg;
   auto new_line = 'n'_lp >> '\n'_lg;
@@ -306,26 +288,14 @@ bool parser_base(regex_param& param, regex_node_*& node)
         return true;
       };
   auto null_character = '0'_lp >> '\0'_lg;
-  auto any_non_digit = 'D'_lp >> [](regex_param& param, auto& node){
-        node = rand_regex::any_non_digit_node();
-        return true;
-      };
+  auto any_non_digit = 'D'_lp >> rand_regex::any_non_digit_gen;
   auto any_whitespace = 's'_lp >> [](regex_param& param, auto& node){
         node = new whitespace_regex_node_{};
         return true;
       };
-  auto any_non_whitespace = 'S'_lp >> [](regex_param& param, auto& node){
-        node = rand_regex::any_non_whitespace_node();
-        return true;
-      };
-  auto any_alphanum_or_underscore = 'w'_lp >> [](regex_param& param, auto& node){
-        node = rand_regex::any_alphanum_or_underscore_node();
-        return true;
-      };
-  auto any_not_alphanum_or_underscore = 'W'_lp >> [](regex_param& param, auto& node){
-        node = rand_regex::any_not_alphanum_or_underscore_node();
-        return true;
-      };
+  auto any_non_whitespace = 'S'_lp >> rand_regex::any_non_whitespace_gen;
+  auto any_alphanum_or_underscore = 'w'_lp >> rand_regex::any_alphanum_or_underscore_gen;
+  auto any_not_alphanum_or_underscore = 'W'_lp >> rand_regex::any_not_alphanum_or_underscore_gen;
   auto hexadecimal_ascii_character_representation = 'x'_lp >> [](regex_param& param, auto& node){ // \x00 to \x7F
           if(param.regex.size() < param.consumed+2 || !::isxdigit((int)param.regex[param.consumed]) || !::isxdigit((int)param.regex[param.consumed+1]))
             throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // either regex ends too soon or the next two characters are not digits
@@ -601,17 +571,12 @@ bool parser_base(regex_param& param, regex_node_*& node)
             ( empty_group_end
               |
               ( // non capturing group
-                '?'_lp >> (':'_lp | [](regex_param& param, auto& node) -> bool {
-                                      throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // not enough characters
-                                    }) >>
-                                    (
-                                      empty_group_end
-                                      |
-                                      ([](regex_param& param, auto& node){
-                                        return parser_regex(param, node);
-                                      } >> ')'_lp)
-                                      | terminate)
-                                    )
+                '?'_lp >> (':'_lp | terminate) >>
+                (
+                    empty_group_end
+                  | (parser_regex >> ')'_lp)
+                  | terminate)
+                )
               |
               [](regex_param& param, auto& node) // capture group
               {
@@ -629,10 +594,7 @@ bool parser_base(regex_param& param, regex_node_*& node)
               } >> ')'_lp))
         | range_or_negated_range
         | parser_escaped
-        | ('.'_lp >> [](regex_param& param, auto& node){
-              node = rand_regex::dot_node();
-              return true;
-            })
+        | ('.'_lp >> rand_regex::dot_gen)
         | (('$'_lp | '^'_lp) >> terminate) // unsupported regex items - '$' end of string and '^' start of string regex items are not supported for now
         | lit_gen; // the rest of the items are treated as literals
 
