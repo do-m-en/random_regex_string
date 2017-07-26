@@ -93,7 +93,7 @@ inline auto operator>>(const Left& left, const Right& right) // sequence parser
 
 inline auto operator "" _lp(char literal) // literal parser
 {
-  return [&](regex_param& param, const auto& context, auto& node){
+  return [=](regex_param& param, const auto& context, auto& node){
               if(param.regex.size() > param.consumed)
               {
                 if(param.regex[param.consumed] == literal)
@@ -110,7 +110,7 @@ inline auto operator "" _lp(char literal) // literal parser
 
 inline auto operator "" _nlp(char literal) // negated literal parser
 {
-  return [&](regex_param& param, const auto& context, auto& node){
+  return [=](regex_param& param, const auto& context, auto& node){
               if(param.regex.size() > param.consumed)
               {
                 if(param.regex[param.consumed] != literal)
@@ -147,7 +147,7 @@ inline auto operator-(const Right& right) // optional_parser
 // ---- generator
 inline auto operator "" _lg(char literal) // literal generator
 {
-  return [&](regex_param& param, const auto& context, auto& node){
+  return [=](regex_param& param, const auto& context, auto& node){
               node = new literal_regex_node_{literal};
               return true;
             };
@@ -157,8 +157,8 @@ inline auto operator "" _lg(char literal) // literal generator
 
 const rule<class regex_rule> regex_rule;
 
-// <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
-auto parser_base = [](regex_param& param, const auto& context, auto& node)
+
+namespace
 {
   /* terminator */
   auto terminate = [](regex_param& param, const auto& context, auto& node) -> bool {
@@ -294,7 +294,7 @@ auto parser_base = [](regex_param& param, const auto& context, auto& node)
 
   auto range_parser =
        ']'_nlp
-      >> [escaped_or_literal, end_range_escaped_or_literal](regex_param& param, const auto& context, auto& node)
+      >> [](regex_param& param, const auto& context, auto& node)
           {
             if(!escaped_or_literal(param, context, node))
               throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // node was not created
@@ -320,7 +320,7 @@ auto parser_base = [](regex_param& param, const auto& context, auto& node)
 
   auto range_or_negated_range =
         '['_lp >>
-        (((('^'_lp >> [range_parser](regex_param& param, const auto& context, auto& node){
+        (((('^'_lp >> [](regex_param& param, const auto& context, auto& node){
           std::vector<regex_node_*> tmp;
           regex_node_* tmp_node;
           for(bool ok = range_parser(param, context, tmp_node); ok; ok = range_parser(param, context, tmp_node))
@@ -440,7 +440,7 @@ auto parser_base = [](regex_param& param, const auto& context, auto& node)
           node = new or_regex_node_(std::move(invert));
           return true;
         })
-      | ([range_parser](regex_param& param, const auto& context, auto& node){
+      | ([](regex_param& param, const auto& context, auto& node){
           std::vector<regex_node_*> items;
           regex_node_* tmp_node;
           for(bool ok = range_parser(param, context, tmp_node); ok; ok = range_parser(param, context, tmp_node))
@@ -461,7 +461,8 @@ auto parser_base = [](regex_param& param, const auto& context, auto& node)
                             return true;
                           };
 
-  auto parser_base_type =
+  // <base> ::= <char> | '\' <char> | '(' <regex> ')' | . | '[' <range> ']'
+  auto parser_base =
           ('('_lp >>
             ( empty_group_end
               |
@@ -492,9 +493,7 @@ auto parser_base = [](regex_param& param, const auto& context, auto& node)
         | ('.'_lp >> rand_regex::dot_gen)
         | (('$'_lp | '^'_lp) >> terminate) // unsupported regex items - '$' end of string and '^' start of string regex items are not supported for now
         | lit_gen; // the rest of the items are treated as literals
-
-  return parser_base_type(param, context, node);
-};
+} // ns
 
 // <factor> ::= <base> { '*' } | <base> { '+' } | <base> { '?' } | <base> { '{}' }
 auto parser_factor = [](regex_param& param, const auto& context, auto& node)
