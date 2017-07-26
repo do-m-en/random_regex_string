@@ -18,7 +18,7 @@ constexpr char ascii_min = 0;
 constexpr char ascii_max = 127;
 
 // !('\t' | '\n' | '\v' | '\f' | '\r' | ' ')
-auto any_non_whitespace_gen = [](regex_param& param, auto& node)
+auto any_non_whitespace_gen = [](regex_param& param, const auto& context, auto& node)
 {
   /* whitespaces:
      '\t' // tab: 9
@@ -34,7 +34,7 @@ auto any_non_whitespace_gen = [](regex_param& param, auto& node)
 };
 
 // A-Z | a-z | 0-9 | _
-auto any_alphanum_or_underscore_gen = [](regex_param& param, auto& node)
+auto any_alphanum_or_underscore_gen = [](regex_param& param, const auto& context, auto& node)
 {
   node = new or_regex_node_{new range_random_regex_node_{'A', 'Z'},
                             new range_random_regex_node_{'a', 'z'},
@@ -44,7 +44,7 @@ auto any_alphanum_or_underscore_gen = [](regex_param& param, auto& node)
 };
 
 // ! 0-9
-auto any_non_digit_gen = [](regex_param& param, auto& node)
+auto any_non_digit_gen = [](regex_param& param, const auto& context, auto& node)
 {
   node = new or_regex_node_{new range_random_regex_node_{ascii_min, '0' - 1},
                             new range_random_regex_node_{'9' + 1, ascii_max}};
@@ -52,7 +52,7 @@ auto any_non_digit_gen = [](regex_param& param, auto& node)
 };
 
 // !(0-9 | _)
-auto any_not_alphanum_or_underscore_gen = [](regex_param& param, auto& node)
+auto any_not_alphanum_or_underscore_gen = [](regex_param& param, const auto& context, auto& node)
 {
   node = new or_regex_node_{new range_random_regex_node_{ascii_min, '0' - 1},
                             new range_random_regex_node_{'9' + 1, 'A' - 1},
@@ -63,7 +63,7 @@ auto any_not_alphanum_or_underscore_gen = [](regex_param& param, auto& node)
 };
 
 // .
-auto dot_gen = [](regex_param& param, auto& node)
+auto dot_gen = [](regex_param& param, const auto& context, auto& node)
 {
   node = new or_regex_node_{new range_random_regex_node_{ascii_min, 9}, // \n - 1
                             new range_random_regex_node_{11, 12}, // \n + 1, \r - 1
