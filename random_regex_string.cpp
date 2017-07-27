@@ -94,29 +94,25 @@ inline auto operator>>(const Left& left, const Right& right) // sequence parser
 inline auto operator "" _lp(char literal) // literal parser
 {
   return [=](regex_param& param, const auto& context, auto& node){
-              if(param.regex.size() > param.consumed)
+              if(param.regex.size() > param.consumed &&
+                param.regex[param.consumed] == literal)
               {
-                if(param.regex[param.consumed] == literal)
-                {
-                  ++param.consumed;
+                ++param.consumed;
 
-                  return true;
-                }
+                return true;
               }
 
               return false;
             };
 }
 
-inline auto operator "" _nlp(char literal) // negated literal parser
+inline auto operator "" _nlp(char literal) // negated literal parser - lookahead
 {
   return [=](regex_param& param, const auto& context, auto& node){
-              if(param.regex.size() > param.consumed)
+              if(param.regex.size() > param.consumed &&
+                param.regex[param.consumed] != literal)
               {
-                if(param.regex[param.consumed] != literal)
-                {
-                  return true;
-                }
+                return true;
               }
 
               return false;
