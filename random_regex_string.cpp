@@ -591,42 +591,38 @@ auto parser_factor = [](regex_param& param, const auto& context, auto& node)
 };
 
 // <term> ::= { <factor> }
-auto term = [](regex_param& param, const auto& context, auto& node) {
-    bool ok = parser_factor(param, context, node);
+auto term =
+    parser_factor >> -('|'_nlp >> ')'_nlp >> // not ) or |
+      (
+        [](regex_param& param, const auto& context, auto& node) {
+          bool ok = true;
 
-    while(ok && param.consumed < param.regex.size() && param.regex[param.consumed] != ')'
-      && param.regex[param.consumed] != '|')
-    {
-      regex_node_* next = nullptr;
-      ok = parser_factor(param, context, next);
-      node = new group_regex_node_(std::vector<regex_node_*>{node, next}); // TODO consider renaming it to sequence
-    }
+          node = new group_regex_node_{node}; // TODO consider renaming it to sequence
+          do
+          {
+            regex_node_* next = nullptr;
+            ok = parser_factor(param, context, next);
+            static_cast<group_regex_node_*>(node)->push_back(next);
+          } while(ok && param.consumed < param.regex.size() && param.regex[param.consumed] != ')'
+            && param.regex[param.consumed] != '|');
 
-    return ok;
-  };
+          return ok;
+        } | terminate));
 
 // <regex> ::= <term> '|' <regex> | <term>
 auto parser_regex = regex_rule =
-//    -('|'_lp) >> term >> -('|'_lp >> regex_rule);
-  [](regex_param& param, const auto& context, auto& node) -> bool
-  {
-    if(param.regex[param.consumed] == '|')
-    {
-      ++param.consumed;
-    }
+    -('|'_lp) >> term >> -('|'_lp >>
+      ( [](regex_param& param, const auto& context, auto& node) -> bool
+        {
+          regex_node_* other = nullptr;
+          bool ok = regex_rule(param, context, other);
 
-    bool ok = term(param, context, node);
+          if(ok)
+            node = new or_regex_node_{node, other};
 
-    if(ok && param.consumed < param.regex.size() && param.regex[param.consumed] == '|')
-    {
-      ++param.consumed; // consume |
-      regex_node_* other = nullptr;
-      ok = regex_rule(param, context, other);
-      node = new or_regex_node_{node, other};
-    }
-
-    return ok;
-  };
+          return ok;
+        }
+        | terminate));
 
 regex_template::regex_template(std::string_view regex)
 {
