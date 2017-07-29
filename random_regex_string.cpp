@@ -445,12 +445,15 @@ namespace
           }
 
           if(!items.empty())
+          {
             node = new or_regex_node_(std::move(items));
-          else
-            throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // [] always fails so it's invalid for a generator
+            return true;
+          }
 
-          return true;
-        })) >> ']'_lp) | terminate);
+          return false;
+        })
+        | terminate // [] always fails so it's invalid for a generator
+        ) >> ']'_lp) | terminate);
 
   auto empty_group_end = ')'_lp >> [](regex_param& param, const auto& context, auto& node){ // handle empty group
                             node = new regex_node_(); // empty
