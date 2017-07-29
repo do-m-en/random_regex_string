@@ -330,7 +330,8 @@ namespace
             return true;
           }
 
-          std::vector<regex_node_*> invert;
+
+          node = new or_regex_node_{};
           std::vector<std::pair<char, char>> ranges;
 
           // convert
@@ -350,15 +351,15 @@ namespace
             // TODO merge
             if(ranges[0].first != ascii_min && ranges[0].second != ascii_max)
             {
-              invert.push_back(new range_random_regex_node_(ascii_min, ranges[0].first - 1));
-              invert.push_back(new range_random_regex_node_(ranges[0].second + 1, ascii_max));
+              static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(ascii_min, ranges[0].first - 1));
+              static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(ranges[0].second + 1, ascii_max));
             }
             else if(ranges[0].first == ascii_min && ranges[0].second == ascii_max)
               throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // in rare case where no characters are allowed throw an exception as regex is faulty...
             else if(ranges[0].first == ascii_min)
-              invert.push_back(new range_random_regex_node_(ranges[0].second + 1, ascii_max));
+              static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(ranges[0].second + 1, ascii_max));
             else
-              invert.push_back(new range_random_regex_node_(ascii_min, ranges[0].first - 1));
+              static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(ascii_min, ranges[0].first - 1));
           }
           else
           {
@@ -378,15 +379,15 @@ namespace
                 {
                   if(cur.first != ascii_min && cur.second != ascii_max)
                   {
-                    invert.push_back(new range_random_regex_node_(min, cur.first - 1));
-                    invert.push_back(new range_random_regex_node_(cur.second + 1, ascii_max));
+                    static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(min, cur.first - 1));
+                    static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(cur.second + 1, ascii_max));
                   }
                   else if(cur.first == ascii_min && cur.second == ascii_max)
                     throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // in rare case where no characters are allowed throw an exception as regex is faulty...
                   else if(cur.first == ascii_min)
-                    invert.push_back(new range_random_regex_node_(cur.second + 1, ascii_max));
+                    static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(cur.second + 1, ascii_max));
                   else
-                    invert.push_back(new range_random_regex_node_(min, cur.first - 1));
+                    static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(min, cur.first - 1));
 
                   break;
                 }
@@ -399,16 +400,16 @@ namespace
                 {
                   if(cur.first != ascii_min && next.second != ascii_max)
                   {
-                    invert.push_back(new range_random_regex_node_(min, cur.first - 1));
-                    invert.push_back(new range_random_regex_node_(next.second + 1, ascii_max));
+                    static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(min, cur.first - 1));
+                    static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(next.second + 1, ascii_max));
                   }
                   else if(cur.first == ascii_min && next.second == ascii_max)
                     // in rare case where no characters are allowed throw an exception as regex is faulty...
                     throw std::runtime_error("Regex error at " + std::to_string(param.consumed));
                   else if(cur.first == ascii_min)
-                    invert.push_back(new range_random_regex_node_(next.second + 1, ascii_max));
+                    static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(next.second + 1, ascii_max));
                   else
-                    invert.push_back(new range_random_regex_node_(min, cur.first - 1));
+                    static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(min, cur.first - 1));
 
                   break;
                 }
@@ -419,8 +420,8 @@ namespace
               {
                 if(cur.first != ascii_min && cur.second != ascii_max)
                 {
-                  invert.push_back(new range_random_regex_node_(min, static_cast<char>(cur.first - 1)));
-                  invert.push_back(new range_random_regex_node_(static_cast<char>(cur.second + 1), static_cast<char>(next.first - 1)));
+                  static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(min, static_cast<char>(cur.first - 1)));
+                  static_cast<or_regex_node_*>(node)->push_back(new range_random_regex_node_(static_cast<char>(cur.second + 1), static_cast<char>(next.first - 1)));
                 }
                 else if(cur.first == ascii_min && cur.second == ascii_max)
                   throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // in rare case where no characters are allowed throw an exception as regex is faulty...
@@ -433,24 +434,18 @@ namespace
             }
           }
 
-          node = new or_regex_node_(std::move(invert));
           return true;
         })
       | ([](regex_param& param, const auto& context, auto& node){
-          std::vector<regex_node_*> items;
+          node = new or_regex_node_{};
           regex_node_* tmp_node;
-          for(bool ok = range_parser(param, context, tmp_node); ok; ok = range_parser(param, context, tmp_node))
+          bool matched = range_parser(param, context, tmp_node);
+          for(bool ok = matched; ok; ok = range_parser(param, context, tmp_node))
           {
-            items.push_back(tmp_node);
+            static_cast<or_regex_node_*>(node)->push_back(tmp_node);
           }
 
-          if(!items.empty())
-          {
-            node = new or_regex_node_(std::move(items));
-            return true;
-          }
-
-          return false;
+          return matched;
         })
         | terminate // [] always fails so it's invalid for a generator
         ) >> ']'_lp) | terminate);
