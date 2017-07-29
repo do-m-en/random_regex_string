@@ -489,7 +489,54 @@ namespace
         | ('.'_lp >> rand_regex::dot_gen)
         | (('$'_lp | '^'_lp) >> terminate) // unsupported regex items - '$' end of string and '^' start of string regex items are not supported for now
         | lit_gen; // the rest of the items are treated as literals
-} // ns
+
+  auto digit_parser = [](regex_param& param){
+        std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed); // TODO find in range 0-9 would be nice...
+
+        if(end == std::string_view::npos || end == param.consumed)
+          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // number was expected
+
+        int digit = std::stoi(std::string(param.regex.substr(param.consumed, end)));
+
+        param.consumed = end;
+
+        return digit;
+      };
+
+  // {x[,y]}
+  auto limited_repetition_parser =
+        '{'_lp
+          >> [](regex_param& param, const auto& context, auto& node) {
+                std::size_t num = 0;
+                if(param.consumed < param.regex.size())
+                {
+                  if(param.regex[param.consumed] != ',')
+                    num = digit_parser(param);
+                  else
+                    throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // syntax x{,y} is not supported in C++ (works as literal in online regex tester)
+                }
+                else
+                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // exception - unexpected end of regex
+
+                if(param.consumed < param.regex.size() && param.regex[param.consumed] == ',')
+                {
+                  if(param.regex.size() > ++param.consumed)
+                  {
+                    if(param.regex[param.consumed] == '}')
+                      node = new repeat_range_regex_node_(node, num);
+                    else
+                      node = new repeat_range_regex_node_(node, num, digit_parser(param));
+                  }
+                  else
+                    throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // segment not closed but end of regex reached
+                }
+                else if(param.regex.size() > param.consumed && param.regex[param.consumed] == '}')
+                  node = new repeat_regex_node_(node, num);
+                else
+                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unexpected character found
+
+                return true;
+              } >> '}'_lp;
 
 // <factor> ::= <base> { '*' } | <base> { '+' } | <base> { '?' } | <base> { '{}' }
 auto parser_factor = [](regex_param& param, const auto& context, auto& node)
@@ -539,56 +586,8 @@ auto parser_factor = [](regex_param& param, const auto& context, auto& node)
   repeat_range_one(param, context, node);
   optional_item(param, context, node);
 
-  auto digit_parser = [](regex_param& param){
-        std::size_t end = param.regex.find_first_not_of("0123456789", param.consumed); // TODO find in range 0-9 would be nice...
-
-        if(end == std::string_view::npos || end == param.consumed)
-          throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // number was expected
-
-        int digit = std::stoi(std::string(param.regex.substr(param.consumed, end)));
-
-        param.consumed = end;
-
-        return digit;
-      };
-
-  // {x[,y]}
-  auto limited_repetition_parser =
-       -('{'_lp
-          >> [digit_parser](regex_param& param, const auto& context, auto& node) {
-                std::size_t num = 0;
-                if(param.consumed < param.regex.size())
-                {
-                  if(param.regex[param.consumed] != ',')
-                    num = digit_parser(param);
-                  else
-                    throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // syntax x{,y} is not supported in C++ (works as literal in online regex tester)
-                }
-                else
-                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // exception - unexpected end of regex
-
-                if(param.consumed < param.regex.size() && param.regex[param.consumed] == ',')
-                {
-                  if(param.regex.size() > ++param.consumed)
-                  {
-                    if(param.regex[param.consumed] == '}')
-                      node = new repeat_range_regex_node_(node, num);
-                    else
-                      node = new repeat_range_regex_node_(node, num, digit_parser(param));
-                  }
-                  else
-                    throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // segment not closed but end of regex reached
-                }
-                else if(param.regex.size() > param.consumed && param.regex[param.consumed] == '}')
-                  node = new repeat_regex_node_(node, num);
-                else
-                  throw std::runtime_error("Regex error at " + std::to_string(param.consumed)); // unexpected character found
-
-                return true;
-              } >> '}'_lp);
-
-  return limited_repetition_parser(param, context, node);
-};
+  return ok;
+} >> -limited_repetition_parser;
 
 // <term> ::= { <factor> }
 auto term =
@@ -623,6 +622,7 @@ auto parser_regex = regex_rule =
           return ok;
         }
         | terminate));
+} // ns
 
 regex_template::regex_template(std::string_view regex)
 {
