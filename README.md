@@ -10,9 +10,9 @@ Repository contains many different branches that are in different stages of feat
 
 They also differ in the way I've implemented the generator as I was experimenting with different ways of implementing it in C++.
 
-The most recent content is on master branch (this is also the branch that I'll continue my work once I get back to it) but if I remember correctly spirit_x3_inspired_parser branch contains the most feature complete version.
+The most recent content is on master branch (this is also the branch that I'll continue developing once I get back to it) but if I remember correctly spirit_x3_inspired_parser branch contains the most feature complete version.
 
-I intended to commit it once I finish it but haven't gotten around to do it. I usually hate putting unfinished things to open source - the world is already full of half baked projects that waste peoples time just by existing in open source domain - but this time I'll make an exception since I need a place to store it and also believe that it is still a good reference for others that are interested in how (not) to implement a regex parser and string generator in C++.
+I intended to add it to open source public domain once it'd be finished but haven't gotten around to do it. I usually hate putting unfinished things to open source - the world is already full of half baked projects that waste peoples time just by existing for others to see - but this time I'll make an exception since I need a place to store it and also believe that it is still a good reference for others that are interested in how (not) to implement a regex parser and string generator in C++.
 
 I hope to get back to it one day but until then: Use it at your own risk :) You've been warned ;)
 
@@ -34,6 +34,7 @@ This is just a short TODO list - there are certainly more missing features.
 - Intentionally generate a string that doesn't match the provided regex - since this library was intended for property based testing it should generate not just patterns that match the provided regex but also on demand generate those that don't match to test negative cases.
 - Pay only for what you use - since regex can contain capture groups, references on those groups and a couple of other regex features that cause a performance penalty (either slows down parsing, generation or uses more memory) code should be written so that the user can toggle support of those features so that overhead is payed only when realy needed.
 - Convert code so that it will support runtime as well as compile time regex parsing (bump to C++20 would probably be a desirable precondition for this).
+- Remove all raw heap allocations - currently code contains memory leaks as the plan was always to remove all the heap allocations for compile time use so not much effort went into correct memory cleanup as that was only an intermediate version.
 
 # License
 Code is licensed under Boost 1.0 license.
